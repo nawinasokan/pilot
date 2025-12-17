@@ -1,0 +1,372 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+{% block title %} {% endblock %}
+
+<!-- Specific CSS goes HERE -->
+{% block stylesheets %}
+
+{% endblock stylesheets %}
+{% block content %}
+{% load tags %}
+<div class="grid-margin-sm-0">
+    <div class="card shadow-sm">
+        <div class="card-header">
+            Input File Upload
+        </div>
+        <div class="card-body">
+            <hr>
+            <div id="uploadBar">
+                <div class="progress">
+                    <div id="progress-bar" class="progress-bar progress-bar-striped" role="progressbar"
+                        aria-valuenow="10" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <br>
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-11 col-sm-12">
+                    <form class="row" action="{% url 'upload' %}" method="POST">
+                        {% csrf_token %}
+                        <input type="text" name="key" id="key" value="MiniRecords" style="display: none;">
+
+                        <div class="col-md-2 col-sm-12">
+                            <select id="status" name="status" class="form-control select-form" style="color: black;">
+                                <option value="All">All</option>
+                                <option value="processing">Processing</option>
+                                <option value="hold">Hold</option>
+                                <option value="completed">Completed</option>
+                                <!-- <option value="deleted">Deleted</option> -->
+                            </select>
+                        </div>
+
+                        <div class="col-md-2 col-sm-12">
+                            <select id="language" name="language" class="form-control select-form" style="color: black;"
+                                required>
+                                <option value="All">ALL</option>
+                                {% for l in langs %}
+                                <option value="{{ l.language}}">{{ l.language }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 col-sm-12">
+                            <div class="row">
+                                <div class="col-md-6 col-sm-12">
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text" id="basic-addon3">From</span>
+                                        </div>
+                                        <input type="date" name="fromDate" id="fromDate" class="form-control"
+                                            placeholder="From Date" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-sm-12">
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text" id="basic-addon3">To</span>
+                                        </div>
+                                        <input type="date" name="toDate" id="toDate" class="form-control"
+                                            placeholder="To Date" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-1 col-sm-12">
+                            <div class="mt-2">
+                                <button class="btn btn-sm btn-success" id="MiniRecords">Get</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="col-sm-12 col-md-1">
+                    {% if key != 'all' and tabledata %}
+                    <form action="{% url 'miniFileDownload' %}" method="POST">
+                        {% csrf_token %}
+                        <button class="btn btn-sm" style="float: right;">
+                            <i class="bi bi-download"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <hr>
+        {% if content == 'show' %}
+        <div class="table-responsive" id="indextable" style="overflow-y: scroll;max-height: 55vh;height: 55vh;">
+            <table class="table">
+                <thead class="thead-light">
+                    <tr>
+                        <th>S.No</th>
+                        <th>Batch ID</th>
+                        <th>File Name</th>
+                        <th>Employee ID</th>
+                        <th>Uploaded Date</th>
+                        <th>Language</th>
+                        <th>Count</th>
+                        <th>production_type</th>
+                        <th>Status</th>
+                        <th class="manage" style="color: rgb(202, 71, 38);">Hold/Progress</th>
+                        <th class="manage" style="color: rgb(202, 71, 38);">Delete</th>
+                        <th style="color: rgb(38, 54, 202);">Download</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in tabledata %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ d.baseid_id__batch_name|filename }}</td>
+                        <td>{{ d.baseid_id__filename }}</td>
+                        <td>{{ d.baseid_id__created_by_id__employeeID }}</td>
+                        <td>{{ d.uploaded_at }}</td>
+                        <td>{{ d.baseid_id__language }}</td>
+                        <td>{{ d.count }}</td>
+                        <td>{{ d.baseid_id__production_type }}</td>
+                        <td>{{ d.status }}</td>
+                        <td class="text-center manage">
+                            <button class="btn btn-sm btn-info"
+                                onclick="filemanagement('{{ d.status }}',`{{ d.baseid_id__batch_name }}`)"
+                                {% if d.status == 'deleted' %} disabled {% endif %}>
+                                <i class="bi bi-arrow-left-right"></i>
+                            </button>
+                        </td>
+                        <td class="text-center manage">
+                            <button class="btn btn-sm btn-danger"
+                                onclick="filemanagement('delete',`{{ d.baseid_id__filename }}`)"><i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                        <td><a class="btn btn-sm btm-link"
+                                href="{% url 'fileDownload' batchid=d.baseid_id__batch_name  filename_form=d.baseid_id__filename  %}"><i
+                                    class="bi bi-download"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody><!-- {% if d.status == 'processing' %} Hold {% else %} Unhold {% endif %} -->
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    var ctntfrm = '{{ status }}';
+    if (ctntfrm == 'deleted') {
+        $('.manage').hide()
+    }
+
+    function filemanagement(key, source) {
+        url = '/api/fileMamagement/';
+        if (key == 'delete') {
+            Swal.fire({
+                title: 'Info!',
+                text: 'Are you sure want to delete? ',
+                icon: 'warning',
+                confirmButtonText: 'Okay',
+                showCancelButton: true,
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    formData = {
+                        key: key,
+                        filename: source,
+                        csrfmiddlewaretoken: '{{ csrf_token }}',
+                    };
+                    $.ajax({
+                        url: url,
+                        type: 'POST',
+                        data: formData,
+                        success: function (response) {
+                            location.reload();
+                        },
+                        error: function (xhr, status, error) {
+                            // Handle any errors
+                            console.error(error);
+                        }
+                    });
+                }
+            });
+        } else if (key != 'delete') {
+            formData = {
+                key: key,
+                batch_name: source,
+                csrfmiddlewaretoken: '{{ csrf_token }}',
+            };
+
+            var stat;
+            if (key == 'processing') {
+                stat = 'Holding'
+            } else if (key == 'hold') {
+                stat = 'Unholding'
+            } else {
+                stat = 'Deleting'
+            }
+
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "You are " + stat,
+                icon: 'warning',
+                showDenyButton: true,
+                confirmButtonText: 'Yes!',
+                input: 'select',
+                inputOptions: {
+                    'DA1': 'DA1',
+                    'DA2': 'DA2',
+                    'QC': 'QC',
+                    'QA': 'QA',
+                    'ALL': 'ALL',
+                },
+                inputPlaceholder: 'Select an option',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Retrieve the selected value
+                    var selectedValue = result.value;
+
+                    // Add the selected value to the formData object
+                    formData.selectedValue = selectedValue;
+
+                    $.ajax({
+                        url: url,
+                        type: 'POST',
+                        data: formData,
+                        success: function (response) {
+                            location.reload();
+                        },
+                        error: function (xhr, status, error) {
+                            // Handle any errors
+                            console.error(error);
+                        }
+                    });
+                }
+            });
+        }
+    }
+
+    function download_csv() {
+        $.ajax({
+            url: '/api/sample_file_download/',  // URL of the view
+            type: 'GET',
+            success: function (data) {
+                // Create a hidden anchor element to trigger the download
+                var a = document.createElement('a');
+                a.href = 'data:attachment/csv,' + encodeURI(data);
+                a.target = '_blank';
+                a.download = 'template.csv';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            },
+            error: function (err) {
+                alert('error')
+            }
+
+        });
+    }
+
+    $('#uploadBar').hide();
+    $('#fileUploadForm').click(function (event) {
+        event.preventDefault();
+
+        // Create a new FormData object
+        var formData = new FormData();
+
+        var fileInput = $('#import_evaluate')[0];
+        var file = fileInput.files[0];
+        var language = $('#language').val();
+        var production_type = $('#production_type').val();
+
+        if (file != null && (language != "" && language != null && production_type != null && production_type != "")) {
+            formData.append('file', file);
+            // formData.append('file_type', $('#file_type').val());
+            formData.append('production_type', production_type);
+            formData.append('language', language);
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            var url = location.href.split(location.host)[1];
+            // alert(url)
+            $('.overlay').css('width', '100%');
+            $('#uploadBar').show();
+            $('buttons').attr('disabled');
+            $('#progress-bar').css('width', '0%');
+            $.ajax({
+                type: 'POST',
+                url: url,
+                data: formData,
+                processData: false, // Prevent jQuery from processing the data
+                contentType: false, // Prevent jQuery from setting the content type
+                xhr: function () {
+                    const xhr = new window.XMLHttpRequest();
+
+                    xhr.upload.addEventListener('progress', function (e) {
+                        if (e.lengthComputable) {
+                            const percent = (e.loaded / e.total) * 100;
+                            if (percent >= 20) {
+                                $('#progress-bar').addClass('bg-danger')
+                                $('#progress-bar').css('width', 20 + '%');
+                            }
+                            if (percent >= 40) {
+                                $('#progress-bar').removeClass('bg-danger').addClass('bg-warning')
+                                $('#progress-bar').css('width', 40 + '%');
+                            }
+                            if (percent >= 60) {
+                                $('#progress-bar').removeClass('bg-warning').addClass('bg-info')
+                                $('#progress-bar').css('width', 60 + '%');
+                            }
+                            if (percent >= 80) {
+                                $('#progress-bar').removeClass('bg-info')
+                                $('#progress-bar').css('width', 80 + '%');
+                            }
+                        }
+                    });
+                    return xhr;
+                },
+            }).done(function (data) {
+                $('.overlay').css('width', '0%');
+                if (data['status'] === 'success') {
+                    $('#progress-bar').addClass('bg-success')
+                    $('#progress-bar').css('width', 100 + '%');
+                    $('buttons').removeAttr('disabled');
+                    Swal.fire({
+                        title: 'Success!',
+                        text: data['result'],
+                        icon: 'success',
+                        confirmButtonText: 'Okay'
+                    }).then(function () {
+                        $("#indextable").load(url+" #indextable");
+                        // $('#duptable').empty();
+                        $('#import_evaluate').val('');
+                        // $('#duptable').html(data['table_data']);
+                        // datatablecall();
+                        $('#uploadBar').hide();
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'Error!',
+                        text: data['result'],
+                        icon: 'warning',
+                        confirmButtonText: 'Okay'
+                    }).then(function () {
+                        location.reload();
+                    });
+                }
+            }).fail(function (error) {
+                $('.overlay').css('width', '0%');
+                Swal.fire({
+                    title: 'Error!',
+                    text: error,
+                    icon: 'error',
+                    confirmButtonText: 'Okay'
+                });
+            });
+        }
+        else {
+            Swal.fire({
+                title: 'Info!',
+                text: 'Values required',
+                icon: 'info',
+                confirmButtonText: 'Okay'
+            });
+        }
+    });
+
+</script>
+
+{% endblock content %}
