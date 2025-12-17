@@ -1,0 +1,277 @@
+/**************** evaluation ***********/
+
+.alert {
+    position: relative;
+    z-index: 1;
+    width: 50%;
+    transform: translate(-50%, -50%);
+    left: 50%;
+    top: 15%;
+    z-index: 999;
+}
+
+#evaluate_form label {
+    font-weight: 600;
+    margin-top: 10px;
+}
+
+.error {
+    color: #e61b0c;
+}
+
+.form-control.error {
+    box-shadow: 1px 1px 5px #e85347;
+    border-color: #e85347;
+    outline: 1px solid #c52b20;
+}
+
+@media only screen and (min-device-width: 1605px) {
+    #scrollable_data {
+        top: 9% !important;
+        width: 87%;
+    }
+
+    .is_production {
+        top: 6% !important;
+    }
+}
+
+@media only screen and (min-device-width : 1024px) {
+    #scrollable_data {
+        min-width: 82%;
+    }
+}
+
+#scrollable_data {
+    top: 16%;
+    bottom: 0;
+    position: fixed;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    background: #ffffff;
+    z-index: 90;
+    height: 300px;
+    /* min-width:82%; */
+}
+
+#questions_data {
+    font-size: 12px;
+}
+
+#questions_data .text-space {
+    display: inline;
+    white-space: pre-wrap;
+}
+
+#questions_data td,
+#questions_data tr,
+#questions_data th {
+    font-size: 13px;
+    padding: 4px;
+    margin: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+/*
+.nk-content-top {
+    margin-top: 30px !important;
+} 
+*/
+
+.scrollable {
+    /* margin-top: 45vh; */
+    padding-left: 50px;
+    padding-right: 50px;
+}
+
+#evaluate_form th,
+#evaluate_form td {
+    padding: 0;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.3em 0.7em;
+    font-size: 75%;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: .25rem;
+    border: none;
+}
+
+#answers_1 {
+    background: #cfffd1;
+}
+
+#answers_2 {
+    background: #ffcdc9;
+}
+
+.bg-answer-1 {
+    background: #cfffd1 !important;
+}
+
+.bg-answer-2 {
+    background: #ffcdc9 !important;
+}
+
+#questions_data {
+    font-size: 15px;
+}
+#txtwrap {
+    text-wrap: pretty
+}
+.bor_clor{
+    border: 1px solid black;
+    color: black;
+}
+/************** Full Screen CSS **************/
+
+.element .card {
+    box-shadow: none !important;
+    border: none !important;
+}
+
+.element {
+    width: 100%;
+    background-color: #ffffff;
+    visibility: visible;
+    font-family: Helvetica, Arial, sans-serif;
+    color: #0e0d0d;
+    font-weight: 500;
+}
+
+.element:-webkit-full-screen {
+    background-color: #ffffff;
+    width: 100vw;
+    height: 100vh;
+    overflow-y: scroll;
+    overflow-x: hidden;
+}
+
+.element:-webkit-full-screen p {
+    visibility: visible;
+}
+
+.element:-moz-full-screen {
+    background-color: #ffffff;
+    width: 100vw;
+    height: 100vh;
+}
+
+.element:-moz-full-screen p {
+    visibility: visible;
+}
+
+.element:-ms-fullscreen {
+    background-color: #e4708900;
+    width: 100vw;
+    height: 100vh;
+}
+
+.element:fullscreen {
+    background-color: #ffffff;
+    width: 100vw;
+    height: 100vh;
+}
+
+.element:fullscreen #scrollable_data {
+    top: 0;
+    width: 100%;
+}
+
+.element:fullscreen .is_fullscreen {
+    visibility: hidden;
+}
+
+.is_visible {
+    visibility: visible;
+}
+
+#questions_data th,
+#questions_data td {
+    height: 0px;
+    vertical-align: middle;
+}
+
+.is_matched {
+    background: #83c23b;
+    color: #000000;
+}
+
+.is_not_matched {
+    background: #e35858;
+    color: #000000;
+}
+
+.is_modal img {
+    width: 100%;
+}
+
+.ans-tip {
+    width: 20px;
+    height: 20px;
+}
+
+#questions_data p {
+    margin-bottom: 0rem;
+}
+
+.element .float-right {
+    position: relative;
+    top: 15px;
+}
+
+#answers_1 .float-right,
+#answers_2 .float-right,
+#comments .float-right {
+    position: relative;
+    top: 6px;
+}
+
+.tooltip-inner {
+    max-width: 100%;
+    white-space: nowrap;
+    text-align: left;
+    border-top: 1px solid #ffffff;
+    border-left: 1px solid #ffffff;
+    border-bottom: 1px solid #ffffff;
+    box-shadow: -1px 1px 6px #000000;
+}
+
+.element .bg-info {
+    cursor: pointer;
+}
+
+.element:fullscreen .tooltip-inner {
+    z-index: 9999;
+}
+
+.element .float-right {
+    cursor: pointer;
+}
+
+.high_light {
+    box-shadow: 1px 1px 5px #000000;
+}
+
+.is_production {
+    top: 9%;
+    position: fixed;
+    width: auto;
+    background: linear-gradient(45deg,#009706,#01a407,#4CAF50);
+    z-index: 999;
+    color: #ffffff;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+
+/* .container-alert .alert {
+    position: relative !important;
+    width: 40%;
+} */

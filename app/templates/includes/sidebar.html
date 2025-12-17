@@ -1,0 +1,61 @@
+<!-- 1. LOAD THE CUSTOM TAG FILE -->
+{% load menu_tags %}
+
+<!-- 2. FETCH DATA AND STORE IN VARIABLE 'allowed_menus' -->
+{% get_allowed_menus request.user as allowed_menus %}
+
+<nav class="sidebar sidebar-offcanvas shadow navbar-nav-scroll scrollbar-winter-neva thin" id="sidebar">
+    <ul class="nav">
+        
+        <!-- DASHBOARD -->
+        {% if request.user.is_superuser or 'Dashboard' in allowed_menus %}
+        <li class="nav-item">
+            <a class="nav-link" href="{% url 'dashboard' %}">
+                <i class="bi bi-grid-fill menu-icon"></i>
+                <span class="menu-title">Dashboard</span>
+            </a>
+        </li>
+        {% endif %}
+
+        <!-- ROLE MANAGEMENT -->
+        {% if request.user.is_superuser or 'Role Management' in allowed_menus %}
+        <li class="nav-item">
+            <a class="nav-link" href="{% url 'role_management' %}">
+                <i class="bi bi-stack menu-icon"></i>
+                <span class="menu-title">Role Management</span>
+            </a>
+        </li>
+        {% endif %}
+
+        <!-- USER MANAGEMENT -->
+        {% if request.user.is_superuser or 'User Management' in allowed_menus %}
+        <li class="nav-item">
+            <a class="nav-link" href="{% url 'user_management' %}">
+                <i class="bi bi-person-workspace menu-icon"></i>
+                <span class="menu-title">User Management</span>
+            </a>
+        </li>
+        {% endif %}
+
+        <!-- MENU PERMISSION -->
+        {% if request.user.is_superuser or 'Menu Permission' in allowed_menus %}
+        <li class="nav-item">
+            <a class="nav-link" href="{% url 'menu_management' %}">
+                <i class="bi bi-menu-button-wide-fill menu-icon"></i>
+                <span class="menu-title">Menu Permission</span>
+            </a>
+        </li>
+        {% endif %}
+
+        <!-- Projec Management -->
+        {% if request.user.is_superuser or 'Project Management' in allowed_menus %}
+        <li class="nav-item">
+            <a class="nav-link" href="{% url 'project_management' %}">
+                <i class="bi bi-folder-fill menu-icon"></i>
+                <span class="menu-title">Project Management</span>
+            </a>
+        </li>
+        {% endif %}
+
+    </ul>
+</nav>

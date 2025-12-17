@@ -1,0 +1,346 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+{% block title %}User Management{% endblock %}
+
+{% block stylesheets %}
+{% endblock stylesheets %}
+
+{% block content %}
+<div class="row">
+
+    <div class="col-12 grid-margin stretch-card">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h4 class="card-title">Add New User</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="createUserForm">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" name="username" class="form-control" required>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">First Name</label>
+                            <input type="text" name="first_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" name="last_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-control" required>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Role</label>
+                            <select name="role" class="form-control" required>
+                                <option value="" disabled selected>-- Select --</option>
+                                {% for role in roles %}
+                                <option value="{{ role.name }}">{{ role.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Location</label>
+                            <input type="text" name="location" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">Create User</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 grid-margin stretch-card">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="userTable" class="table table-hover table-striped">
+                        <thead>
+                            <tr>
+                                <th>S.No</th>
+                                <th>User</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Location</th>
+                                <th>Status</th>
+                                <th>Created At</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for profile in user_profiles %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                              <td
+                                style="
+                                    white-space: normal !important;
+                                    min-width: 220px;
+                                "
+                                >
+                                <div style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 10px;
+                                ">
+                                    <!-- Avatar -->
+                                    <div
+                                    style="
+                                        width: 36px;
+                                        height: 36px;
+                                        min-width: 36px;
+                                        border-radius: 50%;
+                                        background: #4b49ac;
+                                        color: #fff;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        font-weight: bold;
+                                        text-transform: uppercase;
+                                    ">
+                                    {{ profile.user.first_name|slice:":1" }}{{ profile.user.last_name|slice:":1" }}
+                                    </div>
+
+                                    <!-- Text -->
+                                    <div style="line-height: 1.2;">
+                                    <div style="font-weight: 600;">
+                                        {{ profile.user.first_name }} {{ profile.user.last_name }}
+                                    </div>
+                                    <div style="font-size: 12px; color: #6c757d;">
+                                        @{{ profile.user.username }}
+                                    </div>
+                                    </div>
+                                </div>
+                                </td>
+
+
+                                <td>{{ profile.user.email }}</td>
+                                <td>
+                                    {% for user_role in profile.user_roles.all %}
+                                    <label class="badge badge-outline-primary">{{ user_role.role.name }}</label>
+                                    {% empty %}
+                                    <span class="text-muted">No Role</span>
+                                    {% endfor %}
+                                </td>
+                                <td>{{ profile.user.location }}</td>
+                                <td>
+                                    {% if profile.user.is_active %}
+                                    <label class="badge badge-success">Active</label>
+                                    {% else %}
+                                    <label class="badge badge-danger">Inactive</label>
+                                    {% endif %}
+                                </td>
+                                <td>{{ profile.created_at|date:"d M Y" }}</td>
+
+                                <td class="text-center align-middle">
+                                    <button type="button"
+                                        class="btn btn-inverse-info btn-sm btn-icon d-inline-flex align-items-center justify-content-center mx-1 edit-btn"
+                                        data-id="{{ profile.user.id }}" data-username="{{ profile.user.username }}"
+                                        data-firstname="{{ profile.user.first_name }}"
+                                        data-lastname="{{ profile.user.last_name }}"
+                                        data-email="{{ profile.user.email }}"
+                                        data-location="{{ profile.user.location }}"
+                                        data-role="{% for ur in profile.user_roles.all|slice:':1' %}{{ ur.role.name }}{% endfor %}"
+                                        title="Edit">
+                                        <i class="ti-pencil"></i>
+                                    </button>
+
+                                    <button type="button"
+                                        class="btn btn-inverse-danger btn-sm btn-icon delete-confirm d-inline-flex align-items-center justify-content-center mx-1 delete-user-btn"
+                                        data-delete-url="{% url 'delete_user' profile.user.id %}" title="Delete">
+                                        <i class="ti-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editUserModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">Edit User</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="editUserForm">
+                <div class="modal-body">
+                    <input type="hidden" name="user_id" id="edit_user_id">
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label>Username</label>
+                            <input type="text" id="edit_username" class="form-control" disabled>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Role</label>
+                            <select name="role" id="edit_role" class="form-control" required>
+                                {% for role in roles %}
+                                <option value="{{ role.name }}">{{ role.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>First Name</label>
+                            <input type="text" name="first_name" id="edit_first_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Last Name</label>
+                            <input type="text" name="last_name" id="edit_last_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Email</label>
+                            <input type="email" name="email" id="edit_email" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Location</label>
+                            <input type="text" name="location" id="edit_location" class="form-control" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}
+
+{% block javascripts %}
+
+
+<script>
+    $(document).ready(function () {
+        var table = $('#userTable').DataTable({
+            "order": [[5, "desc"]],
+            "pageLength": 10
+        });
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        const csrftoken = getCookie('csrftoken');
+
+
+        $(document).on('click', '.edit-btn', function () {
+            console.log("Edit button clicked");
+
+            const btn = $(this);
+            const id = btn.data('id');
+            const username = btn.data('username');
+            const firstname = btn.data('firstname');
+            const lastname = btn.data('lastname');
+            const email = btn.data('email');
+            const location = btn.data('location');
+            const role = btn.data('role');
+
+            $('#edit_user_id').val(id);
+            $('#edit_username').val(username);
+            $('#edit_first_name').val(firstname);
+            $('#edit_last_name').val(lastname);
+            $('#edit_email').val(email);
+            $('#edit_location').val(location);
+            $('#edit_role').val(role).change();
+            $('#editUserModal').modal('show');
+        });
+
+
+        $('#editUserForm').on('submit', function (e) {
+            e.preventDefault();
+
+            Swal.fire({ title: 'Updating...', didOpen: () => { Swal.showLoading(); } });
+
+            $.ajax({
+                type: 'POST',
+                url: "{% url 'update_user' %}",
+                data: $(this).serialize(),
+                headers: { 'X-CSRFToken': csrftoken },
+                success: function (response) {
+                    Swal.fire('Updated!', 'User details updated.', 'success')
+                        .then(() => { location.reload(); });
+                },
+                error: function (xhr) {
+                    let msg = xhr.responseJSON?.error || "Update Failed";
+                    Swal.fire('Error', msg, 'error');
+                }
+            });
+        });
+
+
+        $(document).on('click', '.delete-user-btn', function () {
+            const deleteUrl = $(this).data('delete-url');
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "This user will be deactivated!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Yes, deactivate!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+
+                    Swal.fire({ title: 'Deactivating...', didOpen: () => { Swal.showLoading(); } });
+
+                    $.ajax({
+                        type: 'POST',
+                        url: deleteUrl,
+                        headers: { 'X-CSRFToken': csrftoken },
+                        success: function (response) {
+                            Swal.fire('Deactivated!', 'User has been deactivated.', 'success')
+                                .then(() => { location.reload(); });
+                        },
+                        error: function (xhr) {
+                            Swal.fire('Error', 'Could not deactivate user.', 'error');
+                        }
+                    });
+                }
+            });
+        });
+        $('#createUserForm').on('submit', function (e) {
+            e.preventDefault();
+            Swal.fire({ title: 'Processing...', didOpen: () => { Swal.showLoading(); } });
+
+            $.ajax({
+                type: 'POST',
+                url: window.location.href,
+                data: $(this).serialize(),
+                headers: { 'X-CSRFToken': csrftoken },
+                success: function (response) {
+                    Swal.fire('Created!', 'User created successfully.', 'success')
+                        .then(() => { location.reload(); });
+                },
+                error: function (xhr) {
+                    let msg = xhr.responseJSON?.error || "Server Error";
+                    Swal.fire('Error', msg, 'error');
+                }
+            });
+        });
+
+    });
+</script>
+{% endblock javascripts %}

@@ -1,0 +1,299 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+{% block title %}Menu Permissions{% endblock %}
+
+{% block stylesheets %}
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<style>
+    .select2-container .select2-selection--single {
+        height: 45px !important;
+        border: 1px solid #ced4da !important;
+        border-radius: 0.25rem !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: normal !important;
+        color: #000 !important;
+        padding-left: 15px !important;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 45px !important;
+        right: 10px !important;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__clear {
+        height: 45px;
+        line-height: 45px;
+        margin-right: 10px;
+        color: red;
+    }
+</style>
+{% endblock stylesheets %}
+
+{% block content %}
+<div class="row">
+
+    <div class="col-md-12 grid-margin stretch-card">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h4 class="card-title">Menu Permissions</h4>
+            </div>
+            <div class="card-body">
+
+                <div class="row justify-content-center mb-4">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="font-weight-bold">Select User:</label>
+                            <select id="userSelect" class="form-control" style="width: 100%;">
+                                <option value="">-- Search for a User --</option>
+                                {% for user in users %}
+                                <option value="{{ user.id }}">
+                                    {{ user.username }} ({{ user.first_name }} {{ user.last_name }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <form id="permissionForm" style="display: none;">
+                    {% csrf_token %}
+
+                    <h5 class="text-center text-primary mb-3">Toggle Menu Visibility</h5>
+
+                    <div class="row">
+                        {% for menu in menus %}
+                        <div class="col-sm-6 col-md-4 col-lg-3 mb-2">
+                            <div class="p-2 border rounded bg-white h-100">
+                                <div class="form-check form-check-flat form-check-primary m-0">
+                                    <label class="form-check-label"
+                                        style="font-size: 0.9rem; cursor: pointer; white-space: nowrap;">
+                                        <input type="checkbox" class="form-check-input menu-checkbox"
+                                            value="{{ menu.id }}">
+                                        &nbsp;&nbsp;{{ menu.name }}
+                                        <i class="input-helper"></i>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- SUBMIT BUTTON -->
+                    <div class="mt-4 mb-5 text-center">
+                        <button type="submit" class="btn btn-primary px-4">
+                            Assign Menu
+                        </button>
+                    </div>
+
+                </form>
+
+                <div id="assignedMenusSection" style="display:none;">
+                    <div class="table-responsive">
+                        <table id="userTable" class="table table-hover table-striped">
+                            <thead>
+                                <tr>
+                                    <th>S.No</th>
+                                    <th>User Name</th>
+                                    <th>Menu Allocated</th>
+                                    <th>Created At</th>
+                                    <th>Created By</th>
+                                    <th>Action</th>
+
+                                </tr>
+                            </thead>
+                            <tbody id="assignedMenusBody">
+                                <!-- Filled by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock content %}
+
+{% block javascripts %}
+
+
+<script>
+$(document).ready(function () {
+
+    const csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
+
+    const table = $('#userTable').DataTable({
+        pageLength: 10,
+        order: [[2, 'desc']],
+        destroy: true,
+        autoWidth: false,
+        columnDefs: [
+            { targets: [0, 5], orderable: false }
+        ]
+    });
+
+    $('#userSelect').select2({
+        placeholder: "Search User...",
+        allowClear: true,
+        width: '100%'
+    });
+
+    $('#userSelect').on('select2:select', function () {
+        const userId = $(this).val();
+        if (!userId) return;
+
+        Swal.fire({
+            title: 'Loading Menu...',
+            didOpen: () => Swal.showLoading(),
+            showConfirmButton: false
+        });
+
+        fetchUserPermissions(userId);
+    });
+
+    $('#userSelect').on('select2:unselect', function () {
+        $('#permissionForm').hide();
+        $('#assignedMenusSection').hide();
+        $('.menu-checkbox').prop('checked', false);
+        table.clear().draw();
+    });
+
+    window.fetchUserPermissions = function (userId) {
+        const url = "{% url 'get_user_menu_permissions' 0 %}".replace('0', userId);
+
+        $.get(url, function (response) {
+
+    Swal.close();
+
+    $('.menu-checkbox').prop('checked', false);
+
+    response.menu_ids.forEach(id => {
+        $('.menu-checkbox[value="' + id + '"]').prop('checked', true);
+    });
+
+    if (response.is_admin) {
+        // 🔒 LOCK UI
+        $('.menu-checkbox').prop('disabled', true);
+        $('#permissionForm button[type="submit"]').hide();
+    } else {
+        $('.menu-checkbox').prop('disabled', false);
+        $('#permissionForm button[type="submit"]').show();
+    }
+
+    $('#permissionForm').fadeIn();
+    $('#assignedMenusSection').fadeIn();
+
+    renderAssignedUser(response);
+});
+
+    }
+
+    function renderAssignedUser(response) {
+        table.clear();
+
+        const menuNames = response.menus.map(m => m.name).join(', ');
+
+        table.row.add([
+            1,
+            response.username,
+            menuNames,
+            response.assigned_at,
+            response.created_by,
+            `
+            <button class="btn btn-inverse-danger btn-sm btn-icon delete-confirm d-inline-flex align-items-center justify-content-center mx-1"
+                onclick="deleteUserAllMenus(${response.user_id})">
+                <i class="ti-trash"></i>
+            </button>
+            `
+        ]).draw();
+    }
+
+    $('#permissionForm').on('submit', function (e) {
+        e.preventDefault();
+
+        const userId = $('#userSelect').val();
+        if (!userId) return;
+
+        const selectedMenus = $('.menu-checkbox:checked')
+            .map(function () { return $(this).val(); })
+            .get();
+
+        Swal.fire({
+            title: 'Saving...',
+            didOpen: () => Swal.showLoading(),
+            showConfirmButton: false
+        });
+
+        $.ajax({
+            url: "{% url 'update_user_menu_permissions' %}",
+            type: 'POST',
+            data: {
+                user_id: userId,
+                menu_ids: selectedMenus,
+                csrfmiddlewaretoken: csrfToken
+            },
+            success: function (response) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Saved!',
+                    timer: 1200,
+                    showConfirmButton: false
+                });
+
+                fetchUserPermissions(userId);
+            },
+            error: function () {
+                Swal.fire('Error', 'Could not save permissions', 'error');
+            }
+        });
+    });
+
+}); 
+
+
+window.deleteUserAllMenus = function (userId) {
+
+    Swal.fire({
+        title: 'Delete all menus?',
+        text: 'This will remove all menu permissions for this user',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        confirmButtonText: 'Yes, delete'
+    }).then(result => {
+
+        if (!result.isConfirmed) return;
+
+        $.post("{% url 'delete_user_all_menus' %}", {
+            user_id: userId,
+            csrfmiddlewaretoken: $('input[name="csrfmiddlewaretoken"]').val()
+        }, function () {
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Deleted',
+                timer: 1200,
+                showConfirmButton: false
+            });
+
+            $('#permissionForm').hide();
+            $('#assignedMenusSection').hide();
+            $('.menu-checkbox').prop('checked', false);
+        });
+    });
+};
+</script>
+
+
+
+{% endblock javascripts %}
