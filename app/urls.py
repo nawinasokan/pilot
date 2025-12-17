@@ -20,9 +20,13 @@ urlpatterns = [
     path('menu-permissions/user/update/', update_user_menu_permissions, name='update_user_menu_permissions'),
     path('menu-permissions/user/delete/', delete_user_all_menus, name='delete_user_all_menus'),
 
-    path("projects/", project_management_page, name="project_management"),    
-    path("projects/create/", create_project_management, name="create_project_management"),  
-    path("projects/list/", project_management_list_api, name="project_management_list_api"),
-    path("projects/edit/<int:project_id>/", project_management_edit, name="project_management_edit"),
-    path("projects/delete/<int:project_id>/", project_management_delete, name="project_management_delete"),
+    path("uploads/", upload_management_page, name="upload_management"),    
+    path("uploads/create/", create_upload_management, name="create_upload_management"),  
+    path("uploads/list/", upload_management_list_api, name="upload_management_list_api"),
+    path("uploads/edit/<int:project_id>/", upload_management_edit, name="upload_management_edit"),
+    path("uploads/delete/<int:project_id>/", upload_management_delete, name="upload_management_delete"),
+
+    path("custom-field-mapping/", custom_field_mapping, name="custom_field_mapping"),
+    path("custom-field/update/", update_custom_field, name="update_custom_field"),
+    path("custom-field/delete/<int:field_id>/", delete_custom_field, name="delete_custom_field"),
 ]

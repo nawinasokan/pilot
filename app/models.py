@@ -173,3 +173,42 @@ class Batch(AuditModel):
     def __str__(self):
         return self.batch_id
 
+
+class CustomExtractionField(AuditModel):
+    FIELD_TYPES = [
+        ('string', 'Text'),
+        ('number', 'Numeric/Amount'),
+        ('date', 'Date'),
+        ('boolean', 'Yes/No'),
+    ]
+    name = models.CharField(max_length=100, help_text="Internal key name (e.g., gstin_number)")
+    field_type = models.CharField(max_length=20, choices=FIELD_TYPES, default='string')
+    is_required = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.name} ({self.field_type})"
+    
+
+class InvoiceData(AuditModel):
+    BATCH_STATUS_CHOICES = [
+        ('PROCESSING', 'Processing'),
+        ('COMPLETED', 'Completed'),
+        ('FAILED', 'Failed'),
+    ]
+    batch_id = models.CharField(max_length=100, db_index=True, help_text="e.g. BATCH001")
+    invoice_no = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    invoice_supplier_gstin_number = models.CharField(max_length=50, null=True, blank=True)
+    invoice_date = models.DateField(null=True, blank=True)
+    invoice_amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    file_name = models.CharField(max_length=255)
+    file_url = models.URLField(max_length=500, null=True, blank=True, db_index=True)
+    extracted_data = models.JSONField(default=dict, blank=True) 
+    status = models.CharField(max_length=20, choices=BATCH_STATUS_CHOICES, default='PROCESSING')
+    is_success_image = models.BooleanField(default=False) 
+    is_duplicate_image = models.BooleanField(default=False) 
+    is_duplicate_link = models.BooleanField(default=False)  
+    is_invalid_link = models.BooleanField(default=False)    
+
+    class Meta:
+        db_table = 'invoice_data_store'
+        verbose_name_plural = "Invoice Store"

@@ -285,7 +285,8 @@ def menu_management(request):
         'Role Management',
         'User Management',
         'Menu Permission',
-        'Project Management',
+        'Upload Management',
+        'Custom Field Mapping'
     ]
 
     for menu_name in SYSTEM_MENUS:
@@ -406,6 +407,61 @@ def delete_user_all_menus(request):
     return JsonResponse({'success': True})
 
 
+
+# #################### Custom Field Mapping ######################
+
+
+@login_required
+def custom_field_mapping(request):
+    if request.method == "POST":
+        name = request.POST.get("field_name")
+        field_type = request.POST.get("field_type")
+        is_required = request.POST.get("is_required") == "required"
+
+        if CustomExtractionField.objects.filter(name=name).exists():
+            return JsonResponse({"error": "Field already exists"}, status=400)
+
+        CustomExtractionField.objects.create(
+            name=name,
+            field_type=field_type,
+            is_required=is_required
+        )
+
+        return JsonResponse({"success": True})
+
+    fields = CustomExtractionField.objects.all().order_by("-created_at")
+    for field in fields:
+        print(field.name, field.field_type, field.is_required, field.created_at)
+    return render(request, "pages/custom_field_mapping.html", {
+        "fields": fields,
+        "field_types": CustomExtractionField.FIELD_TYPES
+    })
+
+
+@login_required
+def update_custom_field(request):
+    if request.method == "POST":
+        field_id = request.POST.get("id")
+        field = get_object_or_404(CustomExtractionField, id=field_id)
+
+        field.name = request.POST.get("field_name")
+        field.field_type = request.POST.get("field_type")
+        field.is_required = request.POST.get("is_required") == "required"
+        field.save()
+
+        return JsonResponse({"success": True})
+
+@login_required
+def delete_custom_field(request, field_id):
+    field = get_object_or_404(CustomExtractionField, id=field_id)
+    field.delete()
+    return JsonResponse({"success": True})
+
+
+
+
+
+
 ################ Project Creation ######################
 def safe_folder_name(value):
     value = value.strip().lower()
@@ -413,13 +469,13 @@ def safe_folder_name(value):
     return value
 
 @login_required(login_url='/')
-def project_management_page(request):
-    return render(request, "pages/project_management.html")
+def upload_management_page(request):
+    return render(request, "pages/upload_management.html")
 
 
 @login_required(login_url='/')
 @require_POST
-def create_project_management(request):
+def create_upload_management(request):
     name = request.POST.get("name")
     code = request.POST.get("code")
     status = request.POST.get("status", "ACTIVE")
@@ -461,11 +517,11 @@ def create_project_management(request):
 
 
 @login_required(login_url='/')
-def project_management_list_api(request):
-    projects = Project.objects.all().order_by("created_at")
+def upload_management_list_api(request):
+    uploads = Project.objects.all().order_by("created_at")
 
     data = []
-    for i, p in enumerate(projects, start=1):
+    for i, p in enumerate(uploads, start=1):
         data.append({
             "id": p.id,
             "sl_no": i,
@@ -479,7 +535,7 @@ def project_management_list_api(request):
 
 @login_required(login_url='/')
 @require_POST
-def project_management_edit(request, project_id):
+def upload_management_edit(request, project_id):
     project = get_object_or_404(Project, id=project_id)
 
     new_name = request.POST.get("name")
@@ -503,7 +559,7 @@ def project_management_edit(request, project_id):
 
 @login_required(login_url='/')
 @require_POST
-def project_management_delete(request, project_id):
+def upload_management_delete(request, project_id):
     project = get_object_or_404(Project, id=project_id)
 
     project_path = project.storage_path
@@ -521,3 +577,4 @@ def project_management_delete(request, project_id):
         "success": True,
         "message": "Project deleted successfully"
     })
+

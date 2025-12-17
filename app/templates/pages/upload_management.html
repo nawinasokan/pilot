@@ -5,8 +5,7 @@
 {% block stylesheets %}
 {% endblock stylesheets %}
 
-{% block content %}
-{% load tags %}
+{% block content %} 
 
 
 <div class="grid-margin-sm-0">
@@ -17,45 +16,26 @@
             <div class="card">
 
                 <div class="card-header">
-                    <h6 class="card-title mb-0">Create Project</h6>
+                    <h6 class="card-title mb-0">Upload Management</h6>
                 </div>
 
                 <div class="card-body">
-                    <form method="POST" action="{% url 'create_project_management' %}">
+                    <form method="POST" action="{% url 'create_upload_management' %}">
                         {% csrf_token %}
 
                         <div class="row g-3">
 
-                            <div class="col-md-4">
-                                <input type="text"
-                                       name="name"
-                                       class="form-control"
-                                       placeholder="Project Name"
-                                       required>
+                            <div class="col-md-10">
+                                <input type="file" name="file_name" class="form-control" accept=".csv,.xlsx,.xls" required>
                             </div>
 
-                            <div class="col-md-3">
-                                <input type="text"
-                                       name="code"
-                                       class="form-control"
-                                       placeholder="Project Code"
-                                       required>
-                            </div>
 
                             <div class="col-md-2">
-                                <select name="status" class="form-control">
-                                    <option value="ACTIVE">Active</option>
-                                    <option value="ON_HOLD">On Hold</option>
-                                    <option value="COMPLETED">Completed</option>
-                                </select>
-                            </div>
-
-                            <div class="col-md-3">
                                 <button type="submit" class="btn btn-primary w-100">
-                                    Create Project
+                                    Upload
                                 </button>
                             </div>
-
+                            
                         </div>
                     </form>
                 </div>
@@ -72,10 +52,11 @@
                             <thead>
                                 <tr>
                                     <th>S.No</th>
-                                    <th>Project Name</th>
-                                    <th>Project Code</th>
+                                    <th>File Name</th>
+                                    <th>Batch ID</th>
                                     <th>Status</th>
-                                    <th>Created At</th>
+                                    <th>Uploaded At</th>
+                                    <th>Uploaded By</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
@@ -144,7 +125,7 @@
 
     $(document).ready(function () {
         const table = $('#userTable').DataTable({
-            ajax: "{% url 'project_management_list_api' %}",
+            ajax: "{% url 'upload_management_list_api' %}",
             pageLength: 10,
             order: [[4, 'desc']],
             destroy: true,
@@ -152,8 +133,8 @@
 
             columns: [
                 { data: "sl_no" },
-                { data: "name" },
-                { data: "code" },
+                { data: "file_name" },
+                { data: "batch_id" },
                 {
                     data: "status",
                     render: function (data) {
@@ -166,6 +147,7 @@
                     }
                 },
                 { data: "created_at" },
+                { data: "created_by" },
                 {
                     data: "id",
                     render: function (id, type, row) {
@@ -203,7 +185,7 @@
             }).then((result) => {
                 if (result.isConfirmed) {
                     $.post(
-                        `/projects/delete/${projectId}/`,
+                        `/uploads/delete/${projectId}/`,
                         { csrfmiddlewaretoken: "{{ csrf_token }}" },
                         function (res) {
                             Swal.fire("Deleted!", res.message, "success");
@@ -240,7 +222,7 @@
             }).then((result) => {
                 if (result.isConfirmed) {
                     $.post(
-                        `/projects/edit/${projectId}/`,
+                        `/uploads/edit/${projectId}/`,
                         {
                             name: $("#edit-name").val(),
                             status: $("#edit-status").val(),

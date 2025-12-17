@@ -47,15 +47,24 @@
         </li>
         {% endif %}
 
-        <!-- Projec Management -->
-        {% if request.user.is_superuser or 'Project Management' in allowed_menus %}
+        <!-- Custom Field Mapping -->
+        {% if request.user.is_superuser or 'Custom Field Mapping' in allowed_menus %}
         <li class="nav-item">
-            <a class="nav-link" href="{% url 'project_management' %}">
+            <a class="nav-link" href="{% url 'custom_field_mapping' %}">
+                <i class="bi bi-intersect menu-icon"></i>
+                <span class="menu-title">Custom Field Mapping</span>
+            </a>
+        </li>
+        {% endif  %}
+
+        <!-- Projec Management -->
+        {% if request.user.is_superuser or 'Upload Management' in allowed_menus %}
+        <li class="nav-item">
+            <a class="nav-link" href="{% url 'upload_management' %}">
                 <i class="bi bi-folder-fill menu-icon"></i>
-                <span class="menu-title">Project Management</span>
+                <span class="menu-title">Upload Management</span>
             </a>
         </li>
         {% endif %}
-
     </ul>
 </nav>
