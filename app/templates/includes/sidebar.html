@@ -1,15 +1,17 @@
-<!-- 1. LOAD THE CUSTOM TAG FILE -->
+{% load static %}
 {% load menu_tags %}
+{% load string_extras %}
 
-<!-- 2. FETCH DATA AND STORE IN VARIABLE 'allowed_menus' -->
 {% get_allowed_menus request.user as allowed_menus %}
+
+{% with current=request.resolver_match.url_name %}
 
 <nav class="sidebar sidebar-offcanvas shadow navbar-nav-scroll scrollbar-winter-neva thin" id="sidebar">
     <ul class="nav">
-        
-        <!-- DASHBOARD -->
+
+        <!-- ================= DASHBOARD ================= -->
         {% if request.user.is_superuser or 'Dashboard' in allowed_menus %}
-        <li class="nav-item">
+        <li class="nav-item {% if current == 'dashboard' %}active{% endif %}">
             <a class="nav-link" href="{% url 'dashboard' %}">
                 <i class="bi bi-grid-fill menu-icon"></i>
                 <span class="menu-title">Dashboard</span>
@@ -17,9 +19,9 @@
         </li>
         {% endif %}
 
-        <!-- ROLE MANAGEMENT -->
+        <!-- ================= ROLE MANAGEMENT ================= -->
         {% if request.user.is_superuser or 'Role Management' in allowed_menus %}
-        <li class="nav-item">
+        <li class="nav-item {% if current == 'role_management' %}active{% endif %}">
             <a class="nav-link" href="{% url 'role_management' %}">
                 <i class="bi bi-stack menu-icon"></i>
                 <span class="menu-title">Role Management</span>
@@ -27,9 +29,9 @@
         </li>
         {% endif %}
 
-        <!-- USER MANAGEMENT -->
+        <!-- ================= USER MANAGEMENT ================= -->
         {% if request.user.is_superuser or 'User Management' in allowed_menus %}
-        <li class="nav-item">
+        <li class="nav-item {% if current == 'user_management' %}active{% endif %}">
             <a class="nav-link" href="{% url 'user_management' %}">
                 <i class="bi bi-person-workspace menu-icon"></i>
                 <span class="menu-title">User Management</span>
@@ -37,25 +39,27 @@
         </li>
         {% endif %}
 
-        <!-- MENU PERMISSION -->
+        <!-- ================= MENU PERMISSION ================= -->
         {% if request.user.is_superuser or 'Menu Permission' in allowed_menus %}
-        <li class="nav-item">
+        <li class="nav-item {% if current == 'menu_management' %}active{% endif %}">
             <a class="nav-link" href="{% url 'menu_management' %}">
-                <i class="bi bi-menu-button-wide-fill menu-icon"></i>
+                <i class="bi bi-shield-lock-fill menu-icon"></i>
                 <span class="menu-title">Menu Permission</span>
             </a>
         </li>
         {% endif %}
 
-        <!-- Projec Management -->
-        {% if request.user.is_superuser or 'Project Management' in allowed_menus %}
-        <li class="nav-item">
-            <a class="nav-link" href="{% url 'project_management' %}">
-                <i class="bi bi-folder-fill menu-icon"></i>
-                <span class="menu-title">Project Management</span>
+        <!-- ================= INVOICE EXTRACTION ================= -->
+        {% if request.user.is_superuser or 'Invoice Extraction' in allowed_menus %}
+        <li class="nav-item {% if current == 'invoice_extraction' %}active{% endif %}">
+            <a class="nav-link" href="{% url 'invoice_extraction' %}">
+                <i class="bi bi-cloud-arrow-up-fill menu-icon"></i>
+                <span class="menu-title">Invoice Extraction</span>
             </a>
         </li>
         {% endif %}
 
     </ul>
 </nav>
+
+{% endwith %}

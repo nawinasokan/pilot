@@ -25,4 +25,9 @@ urlpatterns = [
     path("projects/list/", project_management_list_api, name="project_management_list_api"),
     path("projects/edit/<int:project_id>/", project_management_edit, name="project_management_edit"),
     path("projects/delete/<int:project_id>/", project_management_delete, name="project_management_delete"),
+
+
+
+
+    path("invoice-extraction/", invoice_extraction, name="invoice_extraction"), 
 ]

@@ -238,22 +238,25 @@ def update_user(request):
 
 
 
-@login_required(login_url='/')
+@login_required(login_url="/")
 def delete_user(request, user_id):
-    if request.method == "POST": 
+    if request.method == "POST":
         try:
             user = get_object_or_404(User, id=user_id)
-            
+
             user.is_active = False
-            user.save()
-            
-            return JsonResponse({"message": "User deactivated successfully."})
-            
+            user.save(update_fields=["is_active"])
+
+            UserMenuPermission.objects.filter(user=user).delete()
+
+            UserRole.objects.filter(user_profile__user=user).delete()
+
+            return JsonResponse({"message": "User deactivated and access removed successfully."})
+
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
-    
-    return JsonResponse({"error": "Invalid method"}, status=400)
 
+    return JsonResponse({"error": "Invalid method"}, status=400)
 
 ####################### MENU MANAGEMENT #########################
 @login_required(login_url='/')
@@ -404,6 +407,13 @@ def delete_user_all_menus(request):
 
     UserMenuPermission.objects.filter(user=target_user).delete()
     return JsonResponse({'success': True})
+
+
+################ Invoice ######################
+@login_required(login_url='/')
+def invoice_extraction(request):
+    return render(request, "pages/invoice_extraction.html")
+
 
 
 ################ Project Creation ######################

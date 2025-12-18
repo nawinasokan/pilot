@@ -1,12 +1,11 @@
 {% extends "layouts/base.html" %}
 {% load static %}
-{% block title %}Project Management{% endblock %}
+{% block title %}Invoice Extraction{% endblock %}
 
 {% block stylesheets %}
 {% endblock stylesheets %}
 
 {% block content %}
-
 
 
 <div class="grid-margin-sm-0">
@@ -17,53 +16,34 @@
             <div class="card">
 
                 <div class="card-header">
-                    <h6 class="card-title mb-0">Create Project</h6>
+                    <h6 class="card-title mb-0">Invoice Extraction</h6>
                 </div>
 
                 <div class="card-body">
-                    <form method="POST" action="{% url 'create_project_management' %}">
-                        {% csrf_token %}
+                     <div class="col-md-3 mb-3">
 
-                        <div class="row g-3">
 
-                            <div class="col-md-4">
-                                <input type="text"
-                                       name="name"
-                                       class="form-control"
-                                       placeholder="Project Name"
-                                       required>
-                            </div>
 
-                            <div class="col-md-3">
-                                <input type="text"
-                                       name="code"
-                                       class="form-control"
-                                       placeholder="Project Code"
-                                       required>
-                            </div>
 
-                            <div class="col-md-2">
-                                <select name="status" class="form-control">
-                                    <option value="ACTIVE">Active</option>
-                                    <option value="ON_HOLD">On Hold</option>
-                                    <option value="COMPLETED">Completed</option>
-                                </select>
-                            </div>
 
-                            <div class="col-md-3">
-                                <button type="submit" class="btn btn-primary w-100">
-                                    Create Project
-                                </button>
-                            </div>
 
+
+
+                        
+                            <label class="form-label">File Select</label>
+                            <select name="role" class="form-control" required>
+                                <option value="" disabled selected>Select File</option>
+                                {% for role in roles %}
+                                <option value="{{ role.name }}">{{ role.name }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
-                    </form>
+                   
                 </div>
 
             </div>
         </div>
 
-        <!-- PROJECT LIST (BOTTOM) -->
         <div class="col-12">
             <div class="card">
                 <div class="card-body">
@@ -72,10 +52,13 @@
                             <thead>
                                 <tr>
                                     <th>S.No</th>
-                                    <th>Project Name</th>
-                                    <th>Project Code</th>
-                                    <th>Status</th>
+                                    <th>BATCH ID</th>
+                                    <th>File Name</th>
+                                    <th>Success Count</th>
+                                    <th>Duplicate Count</th>
+                                    <th>Total Count</th>
                                     <th>Created At</th>
+                                    <th>Created By</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
