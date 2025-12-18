@@ -21,10 +21,11 @@ urlpatterns = [
     path('menu-permissions/user/delete/', delete_user_all_menus, name='delete_user_all_menus'),
 
     path("uploads/", upload_management_page, name="upload_management"),    
+    path("preview_file_headers/", preview_file_headers, name="preview_file_headers"),
     path("uploads/create/", create_upload_management, name="create_upload_management"),  
     path("uploads/list/", upload_management_list_api, name="upload_management_list_api"),
-    path("uploads/edit/<int:project_id>/", upload_management_edit, name="upload_management_edit"),
-    path("uploads/delete/<int:project_id>/", upload_management_delete, name="upload_management_delete"),
+    path("uploads/edit/<int:upload_id>/", upload_management_edit, name="upload_management_edit"),
+    path("uploads/delete/<int:upload_id>/", upload_management_delete, name="upload_management_delete"),
 
     path("custom-field-mapping/", custom_field_mapping, name="custom_field_mapping"),
     path("custom-field/update/", update_custom_field, name="update_custom_field"),

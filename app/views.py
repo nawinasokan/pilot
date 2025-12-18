@@ -14,6 +14,9 @@ from django.views.decorators.http import require_http_methods
 from django.db.models import Min, Max
 import re
 import shutil
+import pandas as pd
+from .thread_utils import run_in_thread
+from .services import process_uploaded_file
 
 
 User = get_user_model()
@@ -458,80 +461,122 @@ def delete_custom_field(request, field_id):
     return JsonResponse({"success": True})
 
 
+def generate_batch_id():
+    
+    last_batch = UploadManagement.objects.aggregate(
+        max_batch=Max("batch_id")
+    )["max_batch"]
+
+    if not last_batch:
+        return "BATCH001"
+
+    num = int(last_batch.replace("BATCH", ""))
+    return f"BATCH{num + 1:03d}"
+
+
+def safe_folder_name(name):
+    return "".join(c for c in name if c.isalnum() or c in ("_", "-"))
+
+
+@login_required(login_url="/")
+def preview_file_headers(request):
+    upload_file = request.FILES.get("file")
+    if not upload_file:
+        return JsonResponse({"success": False, "message": "File required"}, status=400)
+
+    ext = upload_file.name.split(".")[-1].lower()
+    try:
+        if ext == "csv":
+            df = pd.read_csv(upload_file, nrows=0)
+        elif ext in ["xlsx", "xls"]:
+            print("SSSSSS")
+            df = pd.read_excel(upload_file, nrows=0)
+            print(df.columns)
+        else:
+            return JsonResponse({"success": False, "message": "Unsupported file"})
+
+        headers = list(df.columns)
+
+        return JsonResponse({
+            "success": True,
+            "headers": headers
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "message": str(e)
+        }, status=500)
+
+
+
+
+
+
+
+
+
 
 
 
 
 ################ Project Creation ######################
-def safe_folder_name(value):
-    value = value.strip().lower()
-    value = re.sub(r"[^a-z0-9_]+", "_", value)
-    return value
 
-@login_required(login_url='/')
+@login_required(login_url="/")
 def upload_management_page(request):
-    return render(request, "pages/upload_management.html")
+    uploads = UploadManagement.objects.order_by("-created_at")
+    return render(request, "pages/upload_management.html", {
+        "uploads": uploads
+    })
 
 
-@login_required(login_url='/')
-@require_POST
+
+@login_required(login_url="/")
 def create_upload_management(request):
-    name = request.POST.get("name")
-    code = request.POST.get("code")
-    status = request.POST.get("status", "ACTIVE")
+    upload_file = request.FILES.get("file")
+    selected_header = request.POST.get("selected_header")
 
-    if not name or not code:
+    if not upload_file or not selected_header:
         return JsonResponse({
             "success": False,
-            "message": "Project name and project code are required"
+            "message": "File and header selection required"
         }, status=400)
 
-    safe_name = safe_folder_name(name)
-    safe_code = safe_folder_name(code)
+    batch_id = generate_batch_id()
 
-    storage_path = os.path.join(
+    batch_folder = os.path.join(
         settings.MEDIA_ROOT,
-        safe_name,
-        safe_code
+        "uploads",
+        batch_id
+    )
+    os.makedirs(batch_folder, exist_ok=True)
+
+    file_path = os.path.join(batch_folder, upload_file.name)
+
+    with open(file_path, "wb+") as dest:
+        for chunk in upload_file.chunks():
+            dest.write(chunk)
+
+    upload_obj = UploadManagement.objects.create(
+        batch_id=batch_id,
+        file_name=upload_file.name,
+        file_url=selected_header,  
+        storage_path=file_path,
+        status="PROCESSING",
+        link_status="VALID",
+        created_by=request.user
     )
 
-    project = Project.objects.create(
-        name=name,
-        code=code,
-        status=status,
-        storage_path=storage_path
-    )
-
-    os.makedirs(storage_path, exist_ok=True)
+    run_in_thread(process_uploaded_file, upload_obj.id)
 
     return JsonResponse({
         "success": True,
-        "message": "Project created successfully",
-        "project": {
-            "id": project.id,
-            "name": project.name,
-            "code": project.code,
-            "storage_path": project.storage_path
-        }
+        "message": "Upload started",
+        "batch_id": batch_id
     }, status=201)
 
 
-@login_required(login_url='/')
-def upload_management_list_api(request):
-    uploads = Project.objects.all().order_by("created_at")
 
-    data = []
-    for i, p in enumerate(uploads, start=1):
-        data.append({
-            "id": p.id,
-            "sl_no": i,
-            "name": p.name,
-            "code": p.code,
-            "status": p.status,
-            "created_at": p.created_at.strftime("%Y-%m-%d %H:%M"),
-        })
-
-    return JsonResponse({"data": data})
 
 @login_required(login_url='/')
 @require_POST
@@ -557,24 +602,52 @@ def upload_management_edit(request, project_id):
     })
 
 
+
+
+@login_required(login_url='/')
+def upload_management_list_api(request):
+    uploads = (
+        UploadManagement.objects
+        .order_by("batch_id", "-created_at")
+        .distinct("batch_id")
+    )
+
+    data = []
+    for i, p in enumerate(uploads, start=1):
+        data.append({
+            "id": p.id,                     # any row id of the batch
+            "batch_id": p.batch_id,
+            "sl_no": i,
+            "file_name": p.file_name,
+            "status": p.status,
+            "created_at": p.created_at.strftime("%Y-%m-%d %H:%M"),
+            "created_by": p.created_by.username if p.created_by else "-",
+        })
+
+    return JsonResponse({"data": data})
+
+
 @login_required(login_url='/')
 @require_POST
-def upload_management_delete(request, project_id):
-    project = get_object_or_404(Project, id=project_id)
+def upload_management_delete(request, upload_id):
 
-    project_path = project.storage_path
-    parent_path = os.path.dirname(project_path)
+    upload = get_object_or_404(UploadManagement, id=upload_id)
+    batch_id = upload.batch_id
 
-    if project_path and os.path.exists(project_path):
-        shutil.rmtree(project_path)
+    file_path = upload.storage_path
+    batch_folder = os.path.dirname(file_path)
+    uploads_root = os.path.join(settings.MEDIA_ROOT, "uploads")
 
-    if os.path.isdir(parent_path) and not os.listdir(parent_path):
-        os.rmdir(parent_path)
+    try:
+        if batch_folder.startswith(uploads_root) and os.path.isdir(batch_folder):
+            shutil.rmtree(batch_folder, ignore_errors=True)
+    except Exception:
+        pass 
 
-    project.delete()
+    with transaction.atomic():
+        UploadManagement.objects.filter(batch_id=batch_id).delete()
 
     return JsonResponse({
         "success": True,
-        "message": "Project deleted successfully"
+        "message": f"Batch {batch_id} deleted successfully"
     })
-
