@@ -1,0 +1,254 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+{% block title %}User Management{% endblock %}
+
+{% block stylesheets %}
+{% endblock stylesheets %}
+
+{% block content %}
+<div class="row">
+
+    <div class="col-12 grid-margin stretch-card">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h4 class="card-title">Custom Field Mapping</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="createmapform">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Field Name</label>
+                            <input type="text" name="field_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Field Type</label>
+                            <select name="field_type" class="form-control" required>
+                                <option value="" disabled selected>-- Select --</option>
+                                {% for key, label in field_types %}
+                                    <option value="{{ key }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Validation Requirement</label>
+                            <select name="is_required" class="form-control" required>
+                                <option value="required">Required</option>
+                                <option value="not_required">Not Required</option>
+                            </select>
+
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">Submit</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 grid-margin stretch-card">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="userTable" class="table table-hover table-striped">
+                        <thead>
+                            <tr>
+                                <th>S.No</th>
+                                <th>Field Name</th>
+                                <th>Field Type</th>
+                                <th>Validation Requirement</th>
+                                <th>Created At</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for f in fields %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>{{ f.name }}</td>
+                                <td>{{ f.get_field_type_display }}</td>
+                                <td>
+                                    {% if f.is_required %}
+                                        <span class="badge badge-success">Required</span>
+                                    {% else %}
+                                        <span class="badge badge-secondary">Not Required</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ f.created_at|date:"d M Y" }}</td>
+                                <td class="text-center">
+                                    <button class="btn btn-inverse-info d-inline-flex align-items-center justify-content-center mx-1 btn-sm btn-icon edit-field"
+                                            data-id="{{ f.id }}"
+                                            data-name="{{ f.name }}"
+                                            data-type="{{ f.field_type }}"
+                                            data-required="{{ f.is_required|yesno:'required,not_required' }}"
+                                            title="Edit">
+                                        <i class="ti-pencil"></i>
+                                    </button>
+
+                                    <button class="btn btn-inverse-danger d-inline-flex align-items-center justify-content-center mx-1 btn-sm btn-icon delete-field"
+                                            data-id="{{ f.id }}"
+                                            title="Delete">
+                                        <i class="ti-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editFieldModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-md" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Custom Field</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+
+            <form id="editFieldForm">
+                {% csrf_token %}
+                <div class="modal-body">
+
+                    <input type="hidden" name="id" id="edit_id">
+
+                    <div class="form-group">
+                        <label>Field Name</label>
+                        <input type="text" name="field_name" id="edit_name"
+                               class="form-control">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Field Type</label>
+                        <select name="field_type" id="edit_type"
+                                class="form-control" required>
+                            {% for key, label in field_types %}
+                                <option value="{{ key }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Validation Requirement</label>
+                        <select name="is_required" id="edit_required"
+                                class="form-control" required>
+                            <option value="required">Required</option>
+                            <option value="not_required">Not Required</option>
+                        </select>
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light"
+                            data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        Update
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+{% endblock content %}
+
+{% block javascripts %}
+
+
+<script>
+    $(document).ready(function () {
+        var table = $('#userTable').DataTable({
+            "order": [[5, "desc"]],
+            "pageLength": 10
+        });
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        const csrftoken = getCookie('csrftoken');
+
+
+        $(document).on('click', '.edit-field', function () {
+            $('#edit_id').val($(this).data('id'));
+            $('#edit_name').val($(this).data('name'));
+            $('#edit_type').val($(this).data('type'));
+            $('#edit_required').val($(this).data('required'));
+            $('#editFieldModal').modal('show');
+        });
+
+
+        $(document).on('click', '.delete-field', function () {
+            const id = $(this).data('id');
+
+            Swal.fire({
+                title: 'Delete?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes'
+            }).then(result => {
+                if (result.isConfirmed) {
+                    $.post(`/custom-field/delete/${id}/`, {
+                        csrfmiddlewaretoken: csrftoken
+                    }, () => location.reload());
+                }
+            });
+        });
+
+        $('#createmapform').on('submit', function (e) {
+            e.preventDefault();
+
+            $.ajax({
+                type: 'POST',
+                url: "{% url 'custom_field_mapping' %}",
+                data: $(this).serialize(),
+                headers: { 'X-CSRFToken': csrftoken },
+                success: () => location.reload(),
+                error: xhr => Swal.fire('Error', xhr.responseJSON.error, 'error')
+            });
+        });
+
+        $('#editFieldForm').on('submit', function (e) {
+            e.preventDefault();
+
+            Swal.fire({ title: 'Updating...', didOpen: () => Swal.showLoading() });
+
+            $.ajax({
+                type: 'POST',
+                url: "{% url 'update_custom_field' %}",
+                data: $(this).serialize(),
+                headers: { 'X-CSRFToken': csrftoken },
+                success: function () {
+                    Swal.fire('Updated!', 'Field updated successfully', 'success')
+                        .then(() => location.reload());
+                },
+                error: function () {
+                    Swal.fire('Error', 'Update failed', 'error');
+                }
+            });
+        });
+
+
+    });
+</script>
+{% endblock javascripts %}
