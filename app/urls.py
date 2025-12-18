@@ -24,7 +24,7 @@ urlpatterns = [
     path("preview_file_headers/", preview_file_headers, name="preview_file_headers"),
     path("uploads/create/", create_upload_management, name="create_upload_management"),  
     path("uploads/list/", upload_management_list_api, name="upload_management_list_api"),
-    path("uploads/delete/<int:upload_id>/", upload_management_delete, name="upload_management_delete"),
+    path("uploads/delete/<str:batch_id>/",upload_management_delete,name="upload_management_delete"),
 
     path("custom-field-mapping/", custom_field_mapping, name="custom_field_mapping"),
     path("custom-field/update/", update_custom_field, name="update_custom_field"),

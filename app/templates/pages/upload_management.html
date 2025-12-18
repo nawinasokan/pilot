@@ -3,14 +3,55 @@
 {% block title %}Upload Management{% endblock %}
 
 {% block stylesheets %}
+<style>
+    .header-option {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        cursor: pointer;
+        margin-bottom: 10px;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+    .header-option:hover {
+        background-color: #f8f9ff;
+        border-color: #6366f1;
+    }
+
+    .header-option .form-check-input {
+        position: static;
+        transform: scale(1.1);
+    }
+
+    .header-option.selected {
+        background-color: #eef2ff;
+        border-color: #6366f1;
+    }
+
+    .modal-body {
+        padding-top: 1rem;
+    }
+
+    .modal-header {
+        padding-top: 0.75rem;
+        padding-bottom: 0.25rem;
+    }
+
+    .modal-header .modal-title {
+        margin-bottom: 0.15rem;
+    }
+</style>
 {% endblock stylesheets %}
 
-{% block content %} 
-
+{% block content %}
 
 <div class="grid-margin-sm-0">
     <div class="row">
-        <!-- FILE UPLOAD FORM (TOP) -->
+
         <div class="col-12 mb-4">
             <div class="card">
 
@@ -19,65 +60,51 @@
                 </div>
 
                 <div class="card-body">
-                    <form id="uploadManagementForm" method="POST" action="{% url 'create_upload_management' %}" enctype="multipart/form-data">
-
+                    <form id="uploadManagementForm" method="POST" action="{% url 'create_upload_management' %}"
+                        enctype="multipart/form-data">
                         {% csrf_token %}
-                        <input type="file" name="file" id="uploadFile" class="form-control" accept=".csv,.xlsx,.xls" required>
-                        <button type="submit" class="btn btn-primary w-100">
-                            Upload
-                        </button>
+
+                        <div class="row g-2 align-items-center">
+                            <div class="col-md-9">
+                                <input type="file" name="file" id="uploadFile" class="form-control"
+                                    accept=".csv,.xlsx,.xls" required>
+                            </div>
+
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    Upload
+                                </button>
+                            </div>
+                        </div>
                     </form>
-
                 </div>
 
             </div>
         </div>
 
-        <div class="modal fade" id="headerModal" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-
-                <div class="modal-header">
-                    <h5 class="modal-title">Select Header</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-
-                <div class="modal-body">
-                    <form id="headerForm"></form>
-                </div>
-
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button class="btn btn-primary" id="confirmUploadBtn">
-                    Confirm Upload
-                    </button>
-                </div>
-
-                </div>
-            </div>
-        </div>
-
-        <!-- Header Preview Modal -->
         <div class="modal fade" id="headerPreviewModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered modal-md">
-                <div class="modal-content">
+            <div class="modal-dialog modal-md">
+                <div class="modal-content border-0 shadow-lg">
 
-                    <div class="modal-header">
-                        <h5 class="modal-title">Select Header</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header border-0 pb-0">
+                        <div>
+                            <h5 class="modal-title fw-semibold">Select Header Column</h5>
+                            <small class="text-muted">
+                                Choose the column that contains the header values
+                            </small>
+                        </div>
                     </div>
 
                     <div class="modal-body">
-                        <form id="headerPreviewForm">
-                            <!-- headers will be injected here -->
+                        <form id="headerPreviewForm" class="header-list">
                         </form>
                     </div>
 
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" data-bs-dismiss="modal">
+                    <div class="modal-footer border-0 pt-0">
+                        <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">
                             Cancel
                         </button>
-                        <button class="btn btn-primary" id="confirmHeaderBtn">
+                        <button type="button" class="btn btn-primary px-4" id="confirmHeaderBtn" disabled>
                             Confirm Upload
                         </button>
                     </div>
@@ -86,8 +113,6 @@
             </div>
         </div>
 
-
-        <!-- FILE UPLOAD LIST (BOTTOM) -->
         <div class="col-12">
             <div class="card">
                 <div class="card-body">
@@ -108,209 +133,269 @@
                         </table>
                     </div>
                 </div>
-
             </div>
         </div>
 
     </div>
 </div>
 
-
 {% endblock content %}
 
 {% block javascripts %}
+<script>
+    $(document).on('submit', '#uploadManagementForm', function (event) {
+        event.preventDefault();
 
-    <script>
-        $(document).on('submit', '#uploadManagementForm', function (event) {
-            event.preventDefault();
+        const form = $(this);
+        const fileInput = $('#uploadFile')[0];
 
-            const form = $(this);
-            const fileInput = $('#uploadFile')[0];
-
-            if (!fileInput.files.length) {
-                Swal.fire("Error", "Please select a file", "error");
-                return;
-            }
-
-            const previewData = new FormData();
-            previewData.append("file", fileInput.files[0]);
-
-            // STEP 1: Preview Headers
-            $.ajax({
-                url: "{% url 'preview_file_headers' %}",
-                type: "POST",
-                data: previewData,
-                processData: false,
-                contentType: false,
-                headers: {
-                    "X-CSRFToken": form.find('[name=csrfmiddlewaretoken]').val()
-                },
-                success: function (response) {
-
-                    if (!response.success) {
-                        Swal.fire("Error", response.message, "error");
-                        return;
-                    }
-
-                    showHeaderPreviewModal(response.headers);
-                },
-                error: function () {
-                    Swal.fire("Error", "Header preview failed", "error");
-                }
-            });
-        });
-
-        let headerModalInstance = null;
-
-        function showHeaderPreviewModal(headers) {
-
-            const form = $('#headerPreviewForm');
-            form.empty();
-
-            headers.forEach((h, i) => {
-                form.append(`
-                    <div class="form-check mb-2">
-                        <input class="form-check-input"
-                            type="radio"
-                            name="selected_header"
-                            id="header_${i}"
-                            value="${h}">
-                        <label class="form-check-label" for="header_${i}">
-                            ${h}
-                        </label>
-                    </div>
-                `);
-            });
-
-            headerModalInstance = new bootstrap.Modal(
-                document.getElementById('headerPreviewModal')
-            );
-            headerModalInstance.show();
+        if (!fileInput.files.length) {
+            Swal.fire("Error", "Please select a file", "error");
+            return;
         }
 
-        $('#confirmHeaderBtn').on('click', function () {
+        const previewData = new FormData();
+        previewData.append("file", fileInput.files[0]);
 
-            const selectedHeader = $('input[name="selected_header"]:checked').val();
-
-            if (!selectedHeader) {
-                Swal.fire("Error", "Please select a header", "warning");
-                return;
+        $.ajax({
+            url: "{% url 'preview_file_headers' %}",
+            type: "POST",
+            data: previewData,
+            processData: false,
+            contentType: false,
+            headers: {
+                "X-CSRFToken": form.find('[name=csrfmiddlewaretoken]').val()
+            },
+            success: function (response) {
+                if (!response.success) {
+                    Swal.fire("Error", response.message, "error");
+                    return;
+                }
+                showHeaderPreviewModal(response.headers);
+            },
+            error: function () {
+                Swal.fire("Error", "Header preview failed", "error");
             }
+        });
+    });
 
-            headerModalInstance.hide();
+    function showHeaderPreviewModal(headers) {
 
-            startUploadWithHeader(selectedHeader);
+        const form = $('#headerPreviewForm');
+        const confirmBtn = $('#confirmHeaderBtn');
+
+        form.empty();
+        confirmBtn.prop('disabled', true);
+
+        headers.forEach(header => {
+            form.append(`
+            <label class="header-option">
+                <input type="radio"
+                       name="selected_header"
+                       value="${header}"
+                       class="form-check-input">
+                <span class="fw-medium">${header}</span>
+            </label>
+        `);
         });
 
+        form.off('change').on('change', 'input[name="selected_header"]', function () {
+            confirmBtn.prop('disabled', false);
+            $('.header-option').removeClass('selected');
+            $(this).closest('.header-option').addClass('selected');
+        });
 
-        function startUploadWithHeader(selectedHeader) {
+        $('#headerPreviewModal').modal({
+            backdrop: true,
+            keyboard: true,
+            show: true
+        });
+    }
 
-            const formData = new FormData();
-            formData.append("file", $('#uploadFile')[0].files[0]);
-            formData.append("selected_header", selectedHeader);
+    $('#confirmHeaderBtn').on('click', function () {
 
-            $.ajax({
-                url: "{% url 'create_upload_management' %}",
-                type: "POST",
-                data: formData,
-                processData: false,
-                contentType: false,
-                headers: {
-                    "X-CSRFToken": $('[name=csrfmiddlewaretoken]').val()
-                },
-                success: function (response) {
+        const selectedHeader = $('input[name="selected_header"]:checked').val();
 
-                    if (response.success) {
-                        Swal.fire("Success", response.message, "success");
-
-                        $('#userTable').DataTable().ajax.reload(null, false);
-                    } else {
-                        Swal.fire("Error", response.message, "error");
-                    }
-                },
-                error: function () {
-                    Swal.fire("Error", "Upload failed", "error");
-                }
-            });
+        if (!selectedHeader) {
+            Swal.fire("Error", "Please select a header", "warning");
+            return;
         }
 
+        $('#headerPreviewModal').modal('hide');
+        startUploadWithHeader(selectedHeader);
+    });
 
-        $(document).ready(function () {
-            const table = $('#userTable').DataTable({
-                ajax: "{% url 'upload_management_list_api' %}",
-                pageLength: 10,
-                order: [[4, 'desc']],
-                destroy: true,
-                autoWidth: false,
+    function startUploadWithHeader(selectedHeader) {
 
-                columns: [
-                    { data: "sl_no" },
-                    { data: "file_name" },
-                    { data: "batch_id" },
-                    {
-                        data: "status",
-                            render: function (data) {
-                                if (data === "PROCESSING") {
-                                    return `
-                                        <span class="spinner-border spinner-border-sm text-primary"></span>
-                                        Processing
-                                    `;
-                                }
-                                if (data === "COMPLETED") {
-                                    return `<span class="badge bg-success">Completed</span>`;
-                                }
-                                if (data === "FAILED") {
-                                    return `<span class="badge bg-danger">Failed</span>`;
-                                }
-                                return data;
-                            }
-                    },
-                    { data: "created_at" },
-                    { data: "created_by" },
-                    {
-                        data: "id",
-                        render: function (id, type, row) {
+        const formData = new FormData();
+        formData.append("file", $('#uploadFile')[0].files[0]);
+        formData.append("selected_header", selectedHeader);
+
+        $.ajax({
+            url: "{% url 'create_upload_management' %}",
+            type: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: {
+                "X-CSRFToken": $('[name=csrfmiddlewaretoken]').val()
+            },
+            success: function (response) {
+                if (response.success) {
+                    Swal.fire("Success", response.message, "success");
+
+                    const table = $('#userTable').DataTable();
+                    table.ajax.reload(null, false);
+
+                    startUploadPolling();
+                } else {
+                    Swal.fire("Error", response.message, "error");
+                }
+            }
+            ,
+            error: function () {
+                Swal.fire("Error", "Upload failed", "error");
+            }
+        });
+    }
+
+    let table;
+
+    $(document).ready(function () {
+
+        table = $('#userTable').DataTable({
+            ajax: "{% url 'upload_management_list_api' %}",
+            pageLength: 10,
+            order: [[4, 'desc']],
+            autoWidth: false,
+
+            columns: [
+                { data: "sl_no" },
+                { data: "file_name" },
+                { data: "batch_id" },
+                {
+                    data: "status",
+                    render: function (data) {
+                        if (data === "PROCESSING") {
                             return `
-                            <button class="btn btn-inverse-danger btn-sm btn-icon delete-btn delete-confirm d-inline-flex align-items-center justify-content-center mx-1"
-                                    data-id="${id}">
+                            <span class="spinner-border spinner-border-sm text-primary text-white"></span>
+                            <span class="text-muted">Processing</span>
+                        `;
+                        }
+                        if (data === "COMPLETED") {
+                            return `<span class="badge bg-success text-white">Completed</span>`;
+                        }
+                        if (data === "FAILED") {
+                            return `<span class="badge bg-danger text-white">Failed</span>`;
+                        }
+                        return data;
+                    }
+                },
+                { data: "created_at" },
+                { data: "created_by" },
+                {
+                    data: "batch_id",
+                    render: function (batchId, type, row) {
+
+                        if (row.status === "PROCESSING") {
+                            return `<span class="text-muted">—</span>`;
+                        }
+
+                        return `
+                            <button class="delete-btn btn btn-inverse-danger btn-sm btn-icon delete-confirm d-inline-flex align-items-center justify-content-center mx-1"
+                                    data-batch="${batchId}">
                                 <i class="ti-trash"></i>
                             </button>
                         `;
-                        }
                     }
-                ],
+                }
 
-                columnDefs: [
-                    { targets: [0, 5], orderable: false }
-                ]
-            });
+            ],
 
-            $(document).on("click", ".delete-btn", function () {
-                const projectId = $(this).data("id");
+            columnDefs: [
+                { targets: [0, 5], orderable: false }
+            ]
+        });
+    });
 
-                Swal.fire({
-                    title: "Are you sure?",
-                    text: "This project will be permanently deleted!",
-                    icon: "warning",
-                    showCancelButton: true,
-                    confirmButtonText: "Yes, delete it!"
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        $.post(
-                            `/uploads/delete/${projectId}/`,
-                            { csrfmiddlewaretoken: "{{ csrf_token }}" },
-                            function (res) {
-                                Swal.fire("Deleted!", res.message, "success");
-                                table.ajax.reload(null, false);
-                            }
-                        );
-                    }
-                });
+
+    $(document).ready(function () {
+        const table = $('#userTable').DataTable();
+        setTimeout(() => {
+            const hasProcessing = table
+                .rows()
+                .data()
+                .toArray()
+                .some(row => row.status === "PROCESSING");
+
+            if (hasProcessing) {
+                startUploadPolling();
+            }
+        }, 1000);
+    });
+
+
+    let uploadStatusPoller = null;
+
+    function startUploadPolling() {
+        if (uploadStatusPoller) return;
+
+        uploadStatusPoller = setInterval(() => {
+            const table = $('#userTable').DataTable();
+            table.ajax.reload(null, false);
+            const hasProcessing = table
+                .rows()
+                .data()
+                .toArray()
+                .some(row => row.status === "PROCESSING");
+
+            if (!hasProcessing) {
+                clearInterval(uploadStatusPoller);
+                uploadStatusPoller = null;
+            }
+        }, 3000); 
+    }
+
+    $(document).on('click', '.delete-btn', function () {
+
+        const batchId = $(this).data('batch');
+
+        if (!batchId) {
+            Swal.fire("Error", "Invalid batch ID", "error");
+            return;
+        }
+
+        Swal.fire({
+            title: "Delete batch?",
+            text: `This will permanently delete batch ${batchId}`,
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Yes, delete",
+        }).then((result) => {
+
+            if (!result.isConfirmed) return;
+
+            $.ajax({
+                url: `/uploads/delete/${batchId}/`,
+                type: "POST",
+                data: {
+                    csrfmiddlewaretoken: "{{ csrf_token }}"
+                },
+                success: function (res) {
+                    Swal.fire("Deleted", res.message, "success");
+                    $('#userTable').DataTable().ajax.reload(null, false);
+                },
+                error: function (xhr) {
+                    Swal.fire(
+                        "Error",
+                        xhr.responseJSON?.message || "Delete failed",
+                        "error"
+                    );
+                }
             });
         });
+    });
 
 
-    </script>
-
-
+</script>
 {% endblock javascripts %}
