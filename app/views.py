@@ -14,7 +14,9 @@ from django.views.decorators.http import require_http_methods
 from django.db.models import Min, Max
 import re
 import shutil
-
+import pandas as pd
+from .thread_utils import run_in_thread
+from .services import process_uploaded_file
 
 User = get_user_model()
 
@@ -243,14 +245,10 @@ def delete_user(request, user_id):
     if request.method == "POST":
         try:
             user = get_object_or_404(User, id=user_id)
-
             user.is_active = False
             user.save(update_fields=["is_active"])
-
             UserMenuPermission.objects.filter(user=user).delete()
-
             UserRole.objects.filter(user_profile__user=user).delete()
-
             return JsonResponse({"message": "User deactivated and access removed successfully."})
 
         except Exception as e:
@@ -288,7 +286,9 @@ def menu_management(request):
         'Role Management',
         'User Management',
         'Menu Permission',
-        'Project Management',
+        'Upload Management',
+        'Custom Field Mapping',
+        'Invoice Extraction',
     ]
 
     for menu_name in SYSTEM_MENUS:
@@ -409,125 +409,227 @@ def delete_user_all_menus(request):
     return JsonResponse({'success': True})
 
 
-################ Invoice ######################
-@login_required(login_url='/')
-def invoice_extraction(request):
-    return render(request, "pages/invoice_extraction.html")
+
+# #################### Custom Field Mapping ######################
+
+
+@login_required
+def custom_field_mapping(request):
+    if request.method == "POST":
+        name = request.POST.get("field_name")
+        field_type = request.POST.get("field_type")
+        is_required = request.POST.get("is_required") == "required"
+
+        if CustomExtractionField.objects.filter(name=name).exists():
+            return JsonResponse({"error": "Field already exists"}, status=400)
+
+        CustomExtractionField.objects.create(
+            name=name,
+            field_type=field_type,
+            is_required=is_required
+        )
+
+        return JsonResponse({"success": True})
+
+    fields = CustomExtractionField.objects.all().order_by("-created_at")
+    for field in fields:
+        print(field.name, field.field_type, field.is_required, field.created_at)
+    return render(request, "pages/custom_field_mapping.html", {
+        "fields": fields,
+        "field_types": CustomExtractionField.FIELD_TYPES
+    })
+
+
+@login_required
+def update_custom_field(request):
+    if request.method == "POST":
+        field_id = request.POST.get("id")
+        field = get_object_or_404(CustomExtractionField, id=field_id)
+
+        field.name = request.POST.get("field_name")
+        field.field_type = request.POST.get("field_type")
+        field.is_required = request.POST.get("is_required") == "required"
+        field.save()
+
+        return JsonResponse({"success": True})
+
+@login_required
+def delete_custom_field(request, field_id):
+    field = get_object_or_404(CustomExtractionField, id=field_id)
+    field.delete()
+    return JsonResponse({"success": True})
+
+
+def generate_batch_id():
+    
+    last_batch = UploadManagement.objects.aggregate(
+        max_batch=Max("batch_id")
+    )["max_batch"]
+
+    if not last_batch:
+        return "BATCH001"
+
+    num = int(last_batch.replace("BATCH", ""))
+    return f"BATCH{num + 1:03d}"
+
+
+def safe_folder_name(name):
+    return "".join(c for c in name if c.isalnum() or c in ("_", "-"))
+
+
+@login_required(login_url="/")
+def preview_file_headers(request):
+    upload_file = request.FILES.get("file")
+    if not upload_file:
+        return JsonResponse({"success": False, "message": "File required"}, status=400)
+
+    ext = upload_file.name.split(".")[-1].lower()
+    try:
+        if ext == "csv":
+            df = pd.read_csv(upload_file, nrows=0)
+        elif ext in ["xlsx", "xls"]:
+            print("SSSSSS")
+            df = pd.read_excel(upload_file, nrows=0)
+            print(df.columns)
+        else:
+            return JsonResponse({"success": False, "message": "Unsupported file"})
+
+        headers = list(df.columns)
+
+        return JsonResponse({
+            "success": True,
+            "headers": headers
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "message": str(e)
+        }, status=500)
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 ################ Project Creation ######################
-def safe_folder_name(value):
-    value = value.strip().lower()
-    value = re.sub(r"[^a-z0-9_]+", "_", value)
-    return value
 
-@login_required(login_url='/')
-def project_management_page(request):
-    return render(request, "pages/project_management.html")
+@login_required(login_url="/")
+def upload_management_page(request):
+    uploads = UploadManagement.objects.order_by("-created_at")
+    return render(request, "pages/upload_management.html", {
+        "uploads": uploads
+    })
 
 
-@login_required(login_url='/')
+
+@login_required(login_url="/")
 @require_POST
-def create_project_management(request):
-    name = request.POST.get("name")
-    code = request.POST.get("code")
-    status = request.POST.get("status", "ACTIVE")
+def create_upload_management(request):
+    upload_file = request.FILES.get("file")
+    selected_header = request.POST.get("selected_header")
 
-    if not name or not code:
+    if not upload_file or not selected_header:
         return JsonResponse({
             "success": False,
-            "message": "Project name and project code are required"
+            "message": "File and header selection required"
         }, status=400)
 
-    safe_name = safe_folder_name(name)
-    safe_code = safe_folder_name(code)
+    batch_id = generate_batch_id()
 
-    storage_path = os.path.join(
+    batch_folder = os.path.join(
         settings.MEDIA_ROOT,
-        safe_name,
-        safe_code
+        "uploads",
+        batch_id
+    )
+    os.makedirs(batch_folder, exist_ok=True)
+
+    file_path = os.path.join(batch_folder, upload_file.name)
+
+    with open(file_path, "wb+") as dest:
+        for chunk in upload_file.chunks():
+            dest.write(chunk)
+
+    upload_obj = UploadManagement.objects.create(
+        batch_id=batch_id,
+        file_name=upload_file.name,
+        file_url=selected_header,  
+        storage_path=file_path,
+        status="PROCESSING",
+        link_status="VALID",
+        created_by=request.user
     )
 
-    project = Project.objects.create(
-        name=name,
-        code=code,
-        status=status,
-        storage_path=storage_path
-    )
-
-    os.makedirs(storage_path, exist_ok=True)
+    run_in_thread(process_uploaded_file, upload_obj.id)
 
     return JsonResponse({
         "success": True,
-        "message": "Project created successfully",
-        "project": {
-            "id": project.id,
-            "name": project.name,
-            "code": project.code,
-            "storage_path": project.storage_path
-        }
+        "message": "Upload started",
+        "batch_id": batch_id
     }, status=201)
 
 
+
 @login_required(login_url='/')
-def project_management_list_api(request):
-    projects = Project.objects.all().order_by("created_at")
+def upload_management_list_api(request):
+    uploads = (
+        UploadManagement.objects
+        .order_by("batch_id", "-created_at")
+        .distinct("batch_id")
+    )
 
     data = []
-    for i, p in enumerate(projects, start=1):
+    for i, p in enumerate(uploads, start=1):
         data.append({
-            "id": p.id,
+            "id": p.id,                    
+            "batch_id": p.batch_id,
             "sl_no": i,
-            "name": p.name,
-            "code": p.code,
+            "file_name": p.file_name,
             "status": p.status,
             "created_at": p.created_at.strftime("%Y-%m-%d %H:%M"),
+            "created_by": p.created_by.username if p.created_by else "-",
         })
 
     return JsonResponse({"data": data})
 
-@login_required(login_url='/')
-@require_POST
-def project_management_edit(request, project_id):
-    project = get_object_or_404(Project, id=project_id)
-
-    new_name = request.POST.get("name")
-    new_status = request.POST.get("status")
-
-    if new_name and new_name != project.name:
-        return JsonResponse({
-            "success": False,
-            "message": "Project name cannot be changed after creation"
-        }, status=400)
-
-    if new_status:
-        project.status = new_status
-        project.save(update_fields=["status", "updated_at"])
-
-    return JsonResponse({
-        "success": True,
-        "message": "Project status updated successfully"
-    })
-
 
 @login_required(login_url='/')
 @require_POST
-def project_management_delete(request, project_id):
-    project = get_object_or_404(Project, id=project_id)
+def upload_management_delete(request, upload_id):
 
-    project_path = project.storage_path
-    parent_path = os.path.dirname(project_path)
+    upload = get_object_or_404(UploadManagement, id=upload_id)
+    batch_id = upload.batch_id
 
-    if project_path and os.path.exists(project_path):
-        shutil.rmtree(project_path)
+    file_path = upload.storage_path
+    batch_folder = os.path.dirname(file_path)
+    uploads_root = os.path.join(settings.MEDIA_ROOT, "uploads")
 
-    if os.path.isdir(parent_path) and not os.listdir(parent_path):
-        os.rmdir(parent_path)
+    try:
+        if batch_folder.startswith(uploads_root) and os.path.isdir(batch_folder):
+            shutil.rmtree(batch_folder, ignore_errors=True)
+    except Exception:
+        pass 
 
-    project.delete()
+    with transaction.atomic():
+        UploadManagement.objects.filter(batch_id=batch_id).delete()
 
     return JsonResponse({
         "success": True,
-        "message": "Project deleted successfully"
+        "message": f"Batch {batch_id} deleted successfully"
     })
+
+
+
+
+################ Invoice ######################
+@login_required(login_url='/')
+def invoice_extraction(request):
+    return render(request, "pages/invoice_extraction.html")

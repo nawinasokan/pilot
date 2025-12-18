@@ -26,17 +26,6 @@ staticfiles/
 # ========================
 # Ignore user uploads and generated masks (too large for Git)
 media/
-media/projects/
-media/ai_masks/
-
-# ========================
-# Machine Learning Models
-# ========================
-# Ignore large model weights (SAM is >300MB)
-models/*.pth
-*.pt
-*.onnx
-*.pkl
 
 # ========================
 # IDE & OS

@@ -49,6 +49,28 @@
         </li>
         {% endif %}
 
+
+         <!-- Custom Field Mapping -->
+        {% if request.user.is_superuser or 'Custom Field Mapping' in allowed_menus %}
+        <li class="nav-item">
+            <a class="nav-link" href="{% url 'custom_field_mapping' %}">
+                <i class="bi bi-intersect menu-icon"></i>
+                <span class="menu-title">Custom Field Mapping</span>
+            </a>
+        </li>
+        {% endif  %}
+
+        <!-- Projec Management -->
+        {% if request.user.is_superuser or 'Upload Management' in allowed_menus %}
+        <li class="nav-item">
+            <a class="nav-link" href="{% url 'upload_management' %}">
+                <i class="bi bi-folder-fill menu-icon"></i>
+                <span class="menu-title">Upload Management</span>
+            </a>
+        </li>
+        {% endif %}
+        
+
         <!-- ================= INVOICE EXTRACTION ================= -->
         {% if request.user.is_superuser or 'Invoice Extraction' in allowed_menus %}
         <li class="nav-item {% if current == 'invoice_extraction' %}active{% endif %}">

@@ -14,3 +14,5 @@ dtlpy
 setuptools>=78.1.1 
 python-dotenv
 django-crum
+pandas
+openpyxl
