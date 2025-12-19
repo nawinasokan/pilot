@@ -522,7 +522,6 @@ def upload_management_page(request):
         "uploads": uploads
     })
 
-
 @login_required(login_url="/")
 @require_POST
 def create_upload_management(request):
@@ -530,42 +529,36 @@ def create_upload_management(request):
     selected_header = request.POST.get("selected_header")
 
     if not upload_file or not selected_header:
-        return JsonResponse({
-            "success": False,
-            "message": "File and header selection required"
-        }, status=400)
+        return JsonResponse(
+            {"success": False, "message": "File and header required"},
+            status=400
+        )
 
     batch_id = generate_batch_id()
-
-    batch_folder = os.path.join(
-        settings.MEDIA_ROOT,
-        batch_id
-    )
+    batch_folder = os.path.join(settings.MEDIA_ROOT, batch_id)
     os.makedirs(batch_folder, exist_ok=True)
 
     file_path = os.path.join(batch_folder, upload_file.name)
 
-    with open(file_path, "wb+") as dest:
+    with open(file_path, "wb+") as f:
         for chunk in upload_file.chunks():
-            dest.write(chunk)
+            f.write(chunk)
 
-    upload_obj = UploadManagement.objects.create(
+    upload = UploadManagement.objects.create(
         batch_id=batch_id,
         file_name=upload_file.name,
-        file_url=selected_header,  
+        file_url=selected_header,   
         storage_path=file_path,
         status="PROCESSING",
-        link_status="VALID",
         created_by=request.user
     )
 
-    run_in_thread(process_uploaded_file, upload_obj.id)
+    run_in_thread(process_uploaded_file, upload.id)
 
-    return JsonResponse({
-        "success": True,
-        "message": "Upload started",
-        "batch_id": batch_id
-    }, status=201)
+    return JsonResponse(
+        {"success": True, "batch_id": batch_id},
+        status=201
+    )
 
 @login_required(login_url='/')
 def upload_management_list_api(request):

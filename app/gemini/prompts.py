@@ -118,7 +118,7 @@ Before extracting CGST and SGST:
     * **Unambiguous Identification MANDATORY:** If Address cannot be clearly identified, RETURN "-".
     * **Consistency Rule:** Extract the same Address consistently. If uncertain, RETURN "-".
 
-* Invoice No:
+* **Invoice No:**
     *   **Goal: Find the *best available* invoice number, prioritizing these labels:**
     *   **1. Primary Label (Highest Priority):** "Delivery Challan Number". Search *specifically* for this label first. It's often in the middle or right-hand side, *not* at the very top.
     *   **2. Secondary Labels (If Primary Not Found):** If, and *only if*, "Delivery Challan Number" is *not found*, then look for these labels, in order of priority:
