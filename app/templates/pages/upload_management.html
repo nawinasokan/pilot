@@ -291,7 +291,20 @@
                         return data;
                     }
                 },
-                { data: "created_at" },
+                {
+                    data: "created_at",
+                    render: function (data) {
+                        if (!data) return "-";
+
+                        const date = new Date(data);
+
+                        return date.toLocaleDateString("en-GB", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric"
+                        });
+                    }
+                },
                 { data: "created_by" },
                 {
                     data: "batch_id",
@@ -353,7 +366,7 @@
                 clearInterval(uploadStatusPoller);
                 uploadStatusPoller = null;
             }
-        }, 3000); 
+        }, 3000);
     }
 
     $(document).on('click', '.delete-btn', function () {

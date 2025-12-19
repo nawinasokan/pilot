@@ -189,8 +189,16 @@
                 Swal.fire({
                     title: "Invoice Extraction Completed",
                     html: html,
-                    icon: successCount > 0 ? "success" : "warning"
+                    icon: successCount > 0 ? "success" : "warning",
+                    confirmButtonText: "OK"
+                }).then(() => {
+                    if (window.table) {
+                        table.ajax.reload(null, false);
+                    }
+                    $('#fileSelect').val(null).trigger('change');
+                    $('#extractBtn').prop('disabled', true);
                 });
+
 
                 $('#extractBtn').prop('disabled', false);
 
@@ -247,7 +255,21 @@
                 },
                 { data: "attempt_count" },
                 { data: "total_count" },
-                { data: "created_at" },
+                {
+                    data: "created_at",
+                    render: function (data) {
+                        if (!data) return "-";
+
+                        const date = new Date(data);
+
+                        return date.toLocaleDateString("en-GB", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric"
+                        });
+                    }
+                }
+                ,
                 { data: "created_by" },
                 {
                     data: "id",
@@ -272,45 +294,45 @@
 
     $('#invoiceTable').on('click', '.delete-invoice', function () {
 
-    const invoiceId = $(this).data('id');
+        const invoiceId = $(this).data('id');
 
-    Swal.fire({
-        title: "Delete Invoice?",
-        text: "This action cannot be undone.",
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonColor: "#d33",
-        confirmButtonText: "Yes, delete"
-    }).then(async (result) => {
+        Swal.fire({
+            title: "Delete Invoice?",
+            text: "This action cannot be undone.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#d33",
+            confirmButtonText: "Yes, delete"
+        }).then(async (result) => {
 
-        if (!result.isConfirmed) return;
+            if (!result.isConfirmed) return;
 
-        try {
-            const res = await fetch(
-                `/api/invoice-extraction/delete/${invoiceId}/`,
-                {
-                    method: "POST",
-                    headers: {
-                        "X-CSRFToken": getCSRFToken()
+            try {
+                const res = await fetch(
+                    `/api/invoice-extraction/delete/${invoiceId}/`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "X-CSRFToken": getCSRFToken()
+                        }
                     }
+                );
+
+                const data = await res.json();
+
+                if (!data.success) {
+                    throw new Error(data.message || "Delete failed");
                 }
-            );
 
-            const data = await res.json();
+                Swal.fire("Deleted!", "Invoice removed.", "success");
 
-            if (!data.success) {
-                throw new Error(data.message || "Delete failed");
+                table.ajax.reload(null, false);
+
+            } catch (err) {
+                Swal.fire("Error", err.message, "error");
             }
-
-            Swal.fire("Deleted!", "Invoice removed.", "success");
-
-            table.ajax.reload(null, false);
-
-        } catch (err) {
-            Swal.fire("Error", err.message, "error");
-        }
+        });
     });
-});
 
 
 </script>
