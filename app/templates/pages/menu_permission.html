@@ -3,8 +3,6 @@
 {% block title %}Menu Permissions{% endblock %}
 
 {% block stylesheets %}
-<!-- Select2 CSS -->
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
 <style>
     .select2-container .select2-selection--single {
@@ -50,7 +48,7 @@
                         <div class="form-group">
                             <label class="font-weight-bold">Select User:</label>
                             <select id="userSelect" class="form-control" style="width: 100%;">
-                                <option value="">-- Search for a User --</option>
+                                <option value="">Search for a User</option>
                                 {% for user in users %}
                                 <option value="{{ user.id }}">
                                     {{ user.username }} ({{ user.first_name }} {{ user.last_name }})

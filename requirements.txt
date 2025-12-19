@@ -16,3 +16,4 @@ python-dotenv
 django-crum
 pandas
 openpyxl
+google-genai

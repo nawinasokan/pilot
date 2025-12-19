@@ -115,9 +115,7 @@ class CustomExtractionField(AuditModel):
         return f"{self.name} ({self.field_type})"
     
 # ----------------Upload Management-------------------
-
 class UploadManagement(AuditModel):
-
     BATCH_STATUS_CHOICES = [
         ('PROCESSING', 'Processing'),
         ('COMPLETED', 'Completed'),
@@ -171,7 +169,6 @@ class UploadManagement(AuditModel):
 
 # ------------------- Invoice Extraction -------------------
 class InvoiceExtraction(AuditModel):
-
     EXTRACTION_STATUS_CHOICES = [
         ("PROCESSING", "Processing"),
         ("SUCCESS", "Success"),

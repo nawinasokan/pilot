@@ -1,5 +1,6 @@
 import json
 import os
+from time import time
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required
@@ -18,8 +19,22 @@ import pandas as pd
 from .thread_utils import run_in_thread
 from .services import process_uploaded_file
 from django.db.models import Count, Q, Max
+from google import genai
+from app.gemini.builder import build_invoice_prompt
+import logging
+from app.gemini.builder import build_invoice_prompt
+from app.gemini.invoice_storage import store_invoice_extraction
+from app.gemini.url_filter import filter_valid_invoice_urls
+from app.gemini.url_filter import normalize_url
+from app.gemini.client import client, GEMINI_MODEL
+
+
+logger = logging.getLogger(__name__)
+
 
 User = get_user_model()
+
+
 
 
 #################### Login/Logout ######################
@@ -628,6 +643,193 @@ def upload_management_delete(request, batch_id):
     })
 
 ################ Invoice  Extraction ######################
-@login_required(login_url='/')
+@login_required(login_url="/")
 def invoice_extraction(request):
-    return render(request, "pages/invoice_extraction.html")
+
+    # 1️⃣ Fetch only cheap DB-level filters
+    qs = (
+        UploadManagement.objects
+        .filter(
+            status="COMPLETED",
+            link_status="VALID",
+            file_url__isnull=False,
+        )
+        .exclude(file_url="")
+        .order_by("-updated_at")
+    )
+
+    valid_files = []
+    invalid_files = []
+
+    # 2️⃣ Hard validation in Python
+    for f in qs:
+        cleaned = normalize_url(f.file_url)
+        if cleaned:
+            f.file_url = cleaned  # normalize for frontend usage
+            valid_files.append(f)
+        else:
+            invalid_files.append(f)
+
+    # 3️⃣ Debug / audit logs
+    logger.info(f"📦 Total DB candidates: {qs.count()}")
+    logger.info(f"✅ Total VALID invoice URLs: {len(valid_files)}")
+    logger.warning(f"❌ Skipped invalid URLs: {len(invalid_files)}")
+
+    for f in valid_files:
+        print(
+            f"➡ ID={f.id} | "
+            f"BATCH={f.batch_id} | "
+            f"FILE={f.file_name} | "
+            f"URL={f.file_url}"
+        )
+
+    return render(
+        request,
+        "pages/invoice_extraction.html",
+        {
+            "files": valid_files,
+            "invalid_count": len(invalid_files),
+        }
+    )
+
+
+@login_required(login_url="/")
+@require_POST
+def start_invoice_extraction(request):
+    """
+    Batch-level invoice extraction using Gemini (google.genai).
+    """
+
+    # ------------------ Parse Request ------------------
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JsonResponse(
+            {"success": False, "message": "Invalid JSON payload"},
+            status=400,
+        )
+
+    batch_id = payload.get("batch_id")
+    if not batch_id:
+        return JsonResponse(
+            {"success": False, "message": "batch_id is required"},
+            status=400,
+        )
+
+    logger.info(f"📥 Extraction requested for batch: {batch_id}")
+
+    # ------------------ Fetch Batch Records ------------------
+    batch_files = UploadManagement.objects.filter(
+        Q(batch_id=batch_id) | Q(id=batch_id)
+    )
+
+    if not batch_files.exists():
+        return JsonResponse(
+            {"success": False, "message": "Batch exists but has no files"},
+            status=404,
+        )
+
+    # ------------------ Collect & Filter URLs ------------------
+    urls = [obj.file_url for obj in batch_files if obj.file_url]
+    valid_urls, invalid_urls = filter_valid_invoice_urls(urls)
+
+    logger.info(f"📦 Total URLs in batch: {len(urls)}")
+    logger.info(f"✅ Valid invoice URLs: {len(valid_urls)}")
+    logger.warning(f"❌ Invalid URLs skipped: {len(invalid_urls)}")
+
+    if not valid_urls:
+        return JsonResponse(
+            {
+                "success": False,
+                "message": "No valid invoice URLs found",
+                "invalid_urls": invalid_urls,
+            },
+            status=400,
+        )
+
+    # ------------------ Build Prompt ------------------
+    try:
+        prompt = build_invoice_prompt()
+
+    except ValueError as exc:
+        logger.warning(str(exc))
+        return JsonResponse(
+            {
+                "success": False,
+                "message": str(exc),
+            },
+            status=400,
+        )
+
+    except Exception:
+        logger.exception("Prompt build failed")
+        return JsonResponse(
+            {
+                "success": False,
+                "message": "Internal error while building extraction prompt",
+            },
+            status=500,
+        )
+
+
+    # ------------------ Process Each Invoice ------------------
+    results = []
+    batch_obj = batch_files.first()
+
+    for url in valid_urls:
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=[
+                    prompt,
+                    url,   # ✅ image/PDF URL
+                ]
+            )
+
+            raw_text = (response.text or "").strip()
+
+            start = raw_text.find("{")
+            end = raw_text.rfind("}")
+
+            if start == -1 or end == -1:
+                raise ValueError("Gemini returned invalid JSON")
+
+            extracted_data = json.loads(raw_text[start:end + 1])
+
+            record = store_invoice_extraction(
+                batch=batch_obj,
+                source_file_name=batch_obj.file_name,
+                source_file_url=url,
+                extracted_data=extracted_data,
+            )
+
+            results.append(
+                {
+                    "url": url,
+                    "status": record.status,
+                    "invoice_id": record.id,
+                }
+            )
+
+        except Exception as exc:
+            logger.exception(f"❌ Extraction failed for {url}")
+            results.append(
+                {
+                    "url": url,
+                    "status": "FAILED",
+                    "error": str(exc),
+                }
+            )
+
+    # ------------------ Final Response ------------------
+    return JsonResponse(
+        {
+            "success": True,
+            "batch_id": batch_id,
+            "total_urls": len(urls),
+            "valid_urls": len(valid_urls),
+            "invalid_urls": invalid_urls,
+            "results": results,
+        },
+        status=200,
+    )

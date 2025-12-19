@@ -3,15 +3,36 @@
 {% block title %}Invoice Extraction{% endblock %}
 
 {% block stylesheets %}
+<link href="{% static 'vendors/select2/select2.min.css' %}" rel="stylesheet" />
+
+<style>
+    .select2-container {
+        width: 100% !important;
+    }
+
+    .select2-container .select2-selection--single {
+        height: 45px !important;
+        border: 1px solid #ced4da !important;
+        border-radius: 0.25rem !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: normal !important;
+        padding-left: 15px !important;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 45px !important;
+    }
+</style>
 {% endblock stylesheets %}
 
 {% block content %}
-
-
 <div class="grid-margin-sm-0">
     <div class="row">
 
-        <!-- CREATE PROJECT (TOP) -->
         <div class="col-12 mb-4">
             <div class="card">
 
@@ -20,51 +41,28 @@
                 </div>
 
                 <div class="card-body">
-                     <div class="col-md-3 mb-3">
 
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Select File / Batch</label>
 
-
-
-
-
-
-
-                        
-                            <label class="form-label">File Select</label>
-                            <select name="role" class="form-control" required>
-                                <option value="" disabled selected>Select File</option>
-                                {% for role in roles %}
-                                <option value="{{ role.name }}">{{ role.name }}</option>
+                            <select id="fileSelect" class="form-select">
+                                <option></option>
+                                {% for file in files %}
+                                <option value="{{ file.id }}">
+                                    {{ file.file_name }} ({{ file.batch_id }})
+                                </option>
                                 {% endfor %}
                             </select>
                         </div>
-                   
-                </div>
 
-            </div>
-        </div>
-
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table id="userTable" class="table table-hover table-striped">
-                            <thead>
-                                <tr>
-                                    <th>S.No</th>
-                                    <th>BATCH ID</th>
-                                    <th>File Name</th>
-                                    <th>Success Count</th>
-                                    <th>Duplicate Count</th>
-                                    <th>Total Count</th>
-                                    <th>Created At</th>
-                                    <th>Created By</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
+                        <div class="col-md-2 mb-3 d-flex align-items-end">
+                            <button id="extractBtn" class="btn btn-primary w-100" disabled>
+                                Extract Invoice
+                            </button>
+                        </div>
                     </div>
+
                 </div>
 
             </div>
@@ -73,172 +71,135 @@
     </div>
 </div>
 
-
 {% endblock content %}
 
 {% block javascripts %}
-
+<script src="{% static 'vendors/select2/select2.min.js' %}"></script>
 <script>
-    $(document).on('submit', 'form', function (event) {
-        event.preventDefault();
-
-        let form = $(this);
-        let url = form.attr('action');
-        let formData = new FormData(form[0]);
-
-        $.ajax({
-            type: 'POST',
-            url: url,
-            data: formData,
-            processData: false,
-            contentType: false,
-            headers: {
-                "X-CSRFToken": form.find("input[name=csrfmiddlewaretoken]").val()
-            },
-        })
-            .done(function (response) {
-                if (response.success) {
-                    Swal.fire({
-                        title: 'Success!',
-                        text: response.message || "Project created successfully.",
-                        icon: 'success',
-                        confirmButtonText: 'Okay'
-                    }).then(() => location.reload());
-                } else {
-                    Swal.fire({
-                        title: 'Error!',
-                        text: response.message || 'Failed, try again.',
-                        icon: 'error',
-                        confirmButtonText: 'Okay'
-                    });
-                }
-            })
-            .fail(function (jqXHR) {
-                Swal.fire({
-                    title: 'Error!',
-                    text: jqXHR.status + ' - ' + jqXHR.statusText,
-                    icon: 'error',
-                    confirmButtonText: 'Okay'
-                });
-            });
-    });
-
-
+    const API_URL = "/api/invoice-extraction/start/";
+    let selectedBatchId = null;
 
     $(document).ready(function () {
-        const table = $('#userTable').DataTable({
-            ajax: "{% url 'project_management_list_api' %}",
-            pageLength: 10,
-            order: [[4, 'desc']],
-            destroy: true,
-            autoWidth: false,
 
-            columns: [
-                { data: "sl_no" },
-                { data: "name" },
-                { data: "code" },
-                {
-                    data: "status",
-                    render: function (data) {
-                        let badgeClass =
-                            data === "ACTIVE" ? "success" :
-                                data === "ON_HOLD" ? "warning" :
-                                    "secondary";
-
-                        return `<span class="badge bg-${badgeClass}">${data}</span>`;
-                    }
-                },
-                { data: "created_at" },
-                {
-                    data: "id",
-                    render: function (id, type, row) {
-                        return `
-                        <button class="btn btn-inverse-info btn-sm btn-icon edit-btn d-inline-flex align-items-center justify-content-center mx-1"
-                                data-id="${id}"
-                                data-name="${row.name}"
-                                data-status="${row.status}">
-                                <i class="ti-pencil"></i>
-                        </button>
-
-                        <button class="btn btn-inverse-danger btn-sm btn-icon delete-btn delete-confirm d-inline-flex align-items-center justify-content-center mx-1"
-                                data-id="${id}">
-                            <i class="ti-trash"></i>
-                        </button>
-                    `;
-                    }
-                }
-            ],
-
-            columnDefs: [
-                { targets: [0, 5], orderable: false }
-            ]
+        // ---------------- Select2 Init ----------------
+        $('#fileSelect').select2({
+            placeholder: "Search file or batch...",
+            allowClear: true,
+            width: '100%'
         });
 
-        $(document).on("click", ".delete-btn", function () {
-            const projectId = $(this).data("id");
+        $('#fileSelect').on('select2:select', function () {
+            selectedBatchId = $(this).val();
+            $('#extractBtn').prop('disabled', false);
+        });
+
+        $('#fileSelect').on('select2:unselect', function () {
+            selectedBatchId = null;
+            $('#extractBtn').prop('disabled', true);
+        });
+
+        // ---------------- Extract Button ----------------
+        $('#extractBtn').on('click', async function () {
+
+            if (!selectedBatchId) return;
+
+            $('#extractBtn').prop('disabled', true);
 
             Swal.fire({
-                title: "Are you sure?",
-                text: "This project will be permanently deleted!",
-                icon: "warning",
-                showCancelButton: true,
-                confirmButtonText: "Yes, delete it!"
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $.post(
-                        `/projects/delete/${projectId}/`,
-                        { csrfmiddlewaretoken: "{{ csrf_token }}" },
-                        function (res) {
-                            Swal.fire("Deleted!", res.message, "success");
-                            table.ajax.reload(null, false);
-                        }
-                    );
-                }
+                title: 'Invoice Extraction',
+                html: 'AI is processing invoices…<br>Please wait.',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
             });
-        });
 
-        $(document).on("click", ".edit-btn", function () {
-            const projectId = $(this).data("id");
-            const name = $(this).data("name");
-            const status = $(this).data("status");
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": getCSRFToken()
+                    },
+                    body: JSON.stringify({
+                        batch_id: selectedBatchId
+                    })
+                });
 
-            Swal.fire({
-                title: "Edit Project",
-                html: `
-                <input id="edit-name"
-                    class="swal2-input"
-                    value="${name}"
-                    disabled>
-                <select id="edit-status" class="swal2-input">
-                    <option value="ACTIVE">Active</option>
-                    <option value="ON_HOLD">On Hold</option>
-                    <option value="COMPLETED">Completed</option>
-                </select>
-            `,
-                didOpen: () => {
-                    $('#edit-status').val(status);
-                },
-                showCancelButton: true,
-                confirmButtonText: "Update"
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $.post(
-                        `/projects/edit/${projectId}/`,
-                        {
-                            name: $("#edit-name").val(),
-                            status: $("#edit-status").val(),
-                            csrfmiddlewaretoken: "{{ csrf_token }}"
-                        },
-                        function (res) {
-                            Swal.fire("Updated!", res.message, "success");
-                            table.ajax.reload();
-                        }
-                    );
+                let data;
+                try {
+                    data = await response.json();
+                } catch {
+                    throw new Error("Invalid server response");
                 }
-            });
-        });
 
+                Swal.close();
+
+                // ---------------- 400 / 500 Handling ----------------
+                if (!response.ok) {
+                    Swal.fire({
+                        title: "Extraction Blocked",
+                        html: data.message || "Request failed",
+                        icon: "warning"
+                    });
+                    $('#extractBtn').prop('disabled', false);
+                    return;
+                }
+
+                // ---------------- API Logical Failure ----------------
+                if (!data.success) {
+                    Swal.fire({
+                        title: "Extraction Failed",
+                        html: data.message || "Extraction could not be completed",
+                        icon: "error"
+                    });
+                    $('#extractBtn').prop('disabled', false);
+                    return;
+                }
+
+                // ---------------- Batch Result Handling ----------------
+                const results = data.results || [];
+
+                const successCount   = results.filter(r => r.status === "SUCCESS").length;
+                const duplicateCount = results.filter(r => r.status === "DUPLICATE").length;
+                const failedCount    = results.filter(r => r.status === "FAILED").length;
+
+                const html = `
+                    <div style="text-align:left">
+                        📦 <b>Total URLs:</b> ${data.total_urls}<br>
+                        🔍 <b>Processed:</b> ${results.length}<br><br>
+
+                        ✅ <b>Success:</b> ${successCount}<br>
+                        ⚠️ <b>Duplicate:</b> ${duplicateCount}<br>
+                        ❌ <b>Failed:</b> ${failedCount}
+                    </div>
+                `;
+
+                Swal.fire({
+                    title: "Invoice Extraction Completed",
+                    html: html,
+                    icon: successCount > 0 ? "success" : "warning"
+                });
+
+                $('#extractBtn').prop('disabled', false);
+
+            } catch (err) {
+                Swal.close();
+                Swal.fire({
+                    title: "Server Error",
+                    text: err.message || "Something went wrong",
+                    icon: "error"
+                });
+                $('#extractBtn').prop('disabled', false);
+            }
+        });
     });
+
+    // ---------------- CSRF Helper ----------------
+    function getCSRFToken() {
+        const cookie = document.cookie
+            .split("; ")
+            .find(row => row.startsWith("csrftoken="));
+        return cookie ? cookie.split("=")[1] : "";
+    }
 </script>
 
 {% endblock javascripts %}
