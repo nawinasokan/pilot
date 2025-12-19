@@ -1,36 +1,38 @@
 {% extends "layouts/base.html" %}
 
-{% block title %} Success Report {% endblock %}
+{% block title %}Success Invoice Report{% endblock %}
 
 {% block stylesheets %}
+
 <style>
-    .select2-container {
-        width: 100% !important;
-    }
+.select2-container {
+    width: 100% !important;
+}
 
-    .select2-container--default .select2-selection--single {
-        height: 42px;
-        border: 1px solid #ced4da;
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-    }
+.select2-container--default .select2-selection--single {
+    height: 42px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+}
 
-    .select2-container--default .select2-selection--single .select2-selection__rendered {
-        padding-left: 14px;
-        color: #495057;
-        font-size: 14px;
-    }
+.select2-container--default .select2-selection--single
+.select2-selection__rendered {
+    padding-left: 14px;
+    color: #495057;
+    font-size: 14px;
+}
 
-    .select2-container--default .select2-selection--single .select2-selection__arrow {
-        height: 42px;
-    }
+.select2-container--default .select2-selection--single
+.select2-selection__arrow {
+    height: 42px;
+}
+
 </style>
-
 {% endblock stylesheets %}
 
 {% block content %}
-
 <div class="container mt-4">
     <div class="card">
         <div class="card-header">
@@ -39,7 +41,7 @@
                     <h4 class="mb-0">Success Invoice Report</h4>
                 </div>
                 <div class="col-md-4 text-end">
-                    <select id="fileSelect" class="form-control w-100">
+                    <select id="fileSelect" class="form-control">
                         <option value="">Select Source File</option>
                     </select>
                 </div>
@@ -58,67 +60,50 @@
         </div>
     </div>
 </div>
-
 {% endblock content %}
 
 {% block javascripts %}
+
 <script>
+let dataTable = null;
+let currentSourceFile = "";
 
-    $(document).ready(function () {
+function pad(n) {
+    return String(n).padStart(2, "0");
+}
 
-        $("#fileSelect").select2({
-            placeholder: "Search source file...",
-            allowClear: true,
-            width: "100%"
-        });
+function getTimestamp() {
+    const d = new Date();
+    return `${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+}
 
-        loadSourceFiles();
+function getSafeFileName(name) {
+    return name.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
 
-        $("#fileSelect").on("change", function () {
-            const fileName = $(this).val();
+function escapeHtml(val) {
+    if (val === null || val === undefined) return "-";
+    return String(val)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 
-            if (!fileName) {
-                renderEmpty("Select a source file to view data");
-                return;
-            }
+$(document).ready(function () {
 
-            fetch(`/reports/success/?source_file_name=${encodeURIComponent(fileName)}`, {
-                headers: {
-                    "X-Requested-With": "XMLHttpRequest"
-                }
-            })
-                .then(res => res.json())
-                .then(resp => {
-                    if (!resp.success || !resp.data.length) {
-                        renderEmpty("No SUCCESS invoices found");
-                        return;
-                    }
-                    renderTable(resp.data);
-                });
-        });
+    $("#fileSelect").select2({
+        placeholder: "Search source file...",
+        allowClear: true,
+        width: "100%"
     });
 
-    function loadSourceFiles() {
-        fetch("/reports/success/", {
-            headers: { "X-Requested-With": "XMLHttpRequest" }
-        })
-            .then(res => res.json())
-            .then(resp => {
-                if (!resp.success) return;
+    loadSourceFiles();
 
-                const select = $("#fileSelect");
-                select.empty().append(`<option></option>`);
-
-                resp.source_files.forEach(f => {
-                    select.append(new Option(f.source_file_name, f.source_file_name));
-                });
-
-                select.trigger("change.select2");
-            });
-    }
-
-    document.getElementById("fileSelect").addEventListener("change", function () {
-        const fileName = this.value;
+    $("#fileSelect").on("change", function () {
+        const fileName = $(this).val();
+        currentSourceFile = fileName || "";
 
         if (!fileName) {
             renderEmpty("Select a source file to view data");
@@ -126,133 +111,163 @@
         }
 
         fetch(`/reports/success/?source_file_name=${encodeURIComponent(fileName)}`, {
-            headers: {
-                "X-Requested-With": "XMLHttpRequest"
-            }
+            headers: { "X-Requested-With": "XMLHttpRequest" }
         })
-            .then(res => res.json())
-            .then(resp => {
-                if (!resp.success || !resp.data.length) {
-                    renderEmpty("No SUCCESS invoices found for this file");
-                    return;
-                }
-                renderTable(resp.data);
-            })
-            .catch(err => {
-                console.error("Invoice load error:", err);
-                renderEmpty("Failed to load data");
-            });
-    });
-
-
-    $('#userSelect').select2({
-        placeholder: "Search User...",
-        allowClear: true,
-        width: '100%'
-    });
-
-    $('#userSelect').on('select2:select', function () {
-        const userId = $(this).val();
-        if (!userId) return;
-
-        Swal.fire({
-            title: 'Loading Menu...',
-            didOpen: () => Swal.showLoading(),
-            showConfirmButton: false
-        });
-
-        fetchUserPermissions(userId);
-    });
-    $('#userSelect').on('select2:unselect', function () {
-        $('#permissionForm').hide();
-        $('#assignedMenusSection').hide();
-        $('.menu-checkbox').prop('checked', false);
-        table.clear().draw();
-    });
-
-
-    let dataTable = null;
-
-    function renderTable(rows) {
-        const table = $("#successTable");
-
-        if ($.fn.DataTable.isDataTable(table)) {
-            table.DataTable().clear().destroy();
-        }
-
-        $("#tableHead").empty();
-        $("#tableBody").empty();
-
-        $("#tableHead").append("<th>S.No</th>");
-
-        const keys = Object.keys(rows[0].extracted_data);
-        keys.forEach(k => {
-            $("#tableHead").append(`<th>${escapeHtml(k)}</th>`);
-        });
-
-        rows.forEach(() => {
-            let tr = "<tr><td></td>";
-            keys.forEach(k => {
-                tr += `<td></td>`;
-            });
-            tr += "</tr>";
-            $("#tableBody").append(tr);
-        });
-
-        dataTable = table.DataTable({
-            pageLength: 10,
-            ordering: true,
-            searching: true,
-            responsive: true,
-            columnDefs: [
-                { targets: 0, orderable: false, searchable: false }
-            ],
-            language: {
-                emptyTable: "No SUCCESS invoices found"
+        .then(res => res.json())
+        .then(resp => {
+            if (!resp.success || !resp.data.length) {
+                renderEmpty("No SUCCESS invoices found");
+                return;
             }
+            renderTable(resp.data);
+        })
+        .catch(() => renderEmpty("Failed to load data"));
+    });
+});
+
+function loadSourceFiles() {
+    fetch("/reports/success/", {
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+    .then(res => res.json())
+    .then(resp => {
+        if (!resp.success) return;
+
+        const select = $("#fileSelect");
+        select.empty().append(`<option></option>`);
+
+        resp.source_files.forEach(f => {
+            select.append(new Option(f.source_file_name, f.source_file_name));
         });
 
-        dataTable.rows().every(function (rowIdx) {
-            const row = rows[rowIdx];
-            const rowData = [];
-            keys.forEach(k => rowData.push(escapeHtml(row.extracted_data[k] ?? "-")));
-            this.data([null, ...rowData]);
-        });
+        select.trigger("change.select2");
+    });
+}
 
-        dataTable.on("order.dt search.dt", function () {
-            dataTable.column(0, { search: "applied", order: "applied" })
-                .nodes()
-                .each((cell, i) => {
-                    cell.innerHTML = i + 1;
-                });
-        }).draw();
+function renderTable(rows) {
+    const table = $("#successTable");
+
+    if ($.fn.DataTable.isDataTable(table)) {
+        table.DataTable().clear().destroy();
     }
 
-    function renderEmpty(message) {
-        if ($.fn.DataTable.isDataTable("#successTable")) {
-            $("#successTable").DataTable().clear().destroy();
+    $("#tableHead").empty();
+    $("#tableBody").empty();
+
+    $("#tableHead").append("<th>S.No</th>");
+    const keys = Object.keys(rows[0].extracted_data);
+    keys.forEach(k => $("#tableHead").append(`<th>${escapeHtml(k)}</th>`));
+
+    rows.forEach(() => {
+        let tr = "<tr><td></td>";
+        keys.forEach(() => tr += "<td></td>");
+        tr += "</tr>";
+        $("#tableBody").append(tr);
+    });
+
+    dataTable = table.DataTable({
+        pageLength: 10,
+        ordering: true,
+        searching: true,
+        responsive: true,
+        dom: '<"d-flex justify-content-end mb-2"B>frtip',
+        buttons: [
+            {
+                extend: "excelHtml5",
+                text: "Export Excel",
+                title : null,
+                className: "btn btn-primary",
+                filename: () =>
+                    `${getSafeFileName(currentSourceFile)}_success_${getTimestamp()}`,
+                exportOptions: {
+                    columns: ":visible",
+                    format: {
+                        body: (data, row, column) => {
+                            if (column === 0) return row + 1; 
+                            return data;
+                        }
+                    }
+                }
+            },
+            {
+                extend: "csvHtml5",
+                text: "Export CSV",
+                title : null,
+                className: "btn btn-primary",
+                filename: () =>
+                    `${getSafeFileName(currentSourceFile)}_success_${getTimestamp()}`,
+                exportOptions: {
+                    columns: ":visible",
+                    format: {
+                        body: (data, row, column) => {
+                            if (column === 0) return row + 1;
+                            return data;
+                        }
+                    }
+                }
+            },
+            {
+                text: "Export JSON",
+                className: "btn btn-primary",
+                action: function (e, dt) {
+                    const out = [];
+
+                    dt.rows({ search: "applied" }).every(function (rowIdx) {
+                        const row = this.data();
+                        const obj = { "S.No": rowIdx + 1 };
+
+                        $("#tableHead th").each(function (i) {
+                            if (i === 0) return;
+                            obj[$(this).text()] = row[i];
+                        });
+
+                        out.push(obj);
+                    });
+
+                    const blob = new Blob(
+                        [JSON.stringify(out, null, 2)],
+                        { type: "application/json" }
+                    );
+
+                    const a = document.createElement("a");
+                    a.href = URL.createObjectURL(blob);
+                    a.download =
+                        `${getSafeFileName(currentSourceFile)}_success_${getTimestamp()}.json`;
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                }
+            }
+        ],
+        columnDefs: [
+            { targets: 0, orderable: false, searchable: false }
+        ],
+        language: {
+            emptyTable: "No SUCCESS invoices found"
         }
+    });
 
-        $("#tableHead").html("<th>S.No</th>");
-        $("#tableBody").html(`
-        <tr>
-            <td class="text-center text-muted">${message}</td>
-        </tr>
-    `);
+    dataTable.rows().every(function (idx) {
+        const r = rows[idx];
+        const rowData = keys.map(k => escapeHtml(r.extracted_data[k] ?? "-"));
+        this.data([null, ...rowData]);
+    });
+
+    dataTable.on("order.dt search.dt", function () {
+        dataTable.column(0).nodes().each((cell, i) => {
+            cell.innerHTML = i + 1;
+        });
+    }).draw();
+}
+
+function renderEmpty(msg) {
+    if ($.fn.DataTable.isDataTable("#successTable")) {
+        $("#successTable").DataTable().clear().destroy();
     }
-
-    function escapeHtml(value) {
-        if (value === null || value === undefined) return "-";
-        return String(value)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
-
+    $("#tableHead").html("<th>S.No</th>");
+    $("#tableBody").html(
+        `<tr><td class="text-center text-muted">${msg}</td></tr>`
+    );
+}
 </script>
-
-
 
 {% endblock javascripts %}
