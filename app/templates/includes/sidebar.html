@@ -50,7 +50,7 @@
         {% endif %}
 
 
-          <!-- ================= Custom Field Mapping  ================= -->
+        <!-- ================= Custom Field Mapping  ================= -->
         {% if request.user.is_superuser or 'Custom Field Mapping' in allowed_menus %}
         <li class="nav-item {% if current == 'custom_field_mapping' %}active{% endif %}">
             <a class="nav-link" href="{% url 'custom_field_mapping' %}">
@@ -58,9 +58,9 @@
                 <span class="menu-title">Custom Field Mapping</span>
             </a>
         </li>
-        {% endif  %}
+        {% endif %}
 
-         <!-- ================= Upload Management ================= -->
+        <!-- ================= Upload Management ================= -->
         {% if request.user.is_superuser or 'Upload Management' in allowed_menus %}
         <li class="nav-item {% if current == 'upload_management' %}active{% endif %}">
             <a class="nav-link" href="{% url 'upload_management' %}">
@@ -69,9 +69,9 @@
             </a>
         </li>
         {% endif %}
-        
 
-         <!-- ================= INVOICE EXTRACTION ================= -->
+
+        <!-- ================= INVOICE EXTRACTION ================= -->
         {% if request.user.is_superuser or 'Invoice Extraction' in allowed_menus %}
         <li class="nav-item {% if current == 'invoice_extraction' %}active{% endif %}">
             <a class="nav-link" href="{% url 'invoice_extraction' %}">
@@ -81,6 +81,45 @@
         </li>
         {% endif %}
 
+        <!-- ================= REPORTS ================= -->
+        {% if request.user.is_superuser or 'Reports' in allowed_menus %}
+        <li class="nav-item {% if current|startswith:'report_' %}active{% endif %}">
+
+            <a class="nav-link" href="#reportsMenu" data-toggle="collapse"
+                aria-expanded="{% if current|startswith:'report_' %}true{% else %}false{% endif %}">
+                <i class="bi bi-bar-chart-fill menu-icon"></i>
+                <span class="menu-title">Reports</span>
+                <i class="menu-arrow"></i>
+            </a>
+
+            <div class="collapse {% if current|startswith:'report_' %}show{% endif %}" id="reportsMenu">
+                <ul class="nav flex-column sub-menu">
+
+                    <li class="nav-item">
+                        <a class="nav-link {% if current == 'report_success' %}active{% endif %}"
+                            href="{% url 'report_success' %}">
+                            Success Report
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link {% if current == 'report_duplicate' %}active{% endif %}"
+                            href="{% url 'report_duplicate' %}">
+                            Duplicate Report
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link {% if current == 'report_invalid' %}active{% endif %}"
+                            href="{% url 'report_invalid' %}">
+                            Invalid Report
+                        </a>
+                    </li>
+
+                </ul>
+            </div>
+        </li>
+        {% endif %}
     </ul>
 </nav>
 

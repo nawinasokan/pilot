@@ -1,0 +1,258 @@
+{% extends "layouts/base.html" %}
+
+{% block title %} Success Report {% endblock %}
+
+{% block stylesheets %}
+<style>
+    .select2-container {
+        width: 100% !important;
+    }
+
+    .select2-container--default .select2-selection--single {
+        height: 42px;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        padding-left: 14px;
+        color: #495057;
+        font-size: 14px;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 42px;
+    }
+</style>
+
+{% endblock stylesheets %}
+
+{% block content %}
+
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h4 class="mb-0">Success Invoice Report</h4>
+                </div>
+                <div class="col-md-4 text-end">
+                    <select id="fileSelect" class="form-control w-100">
+                        <option value="">Select Source File</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body">
+            <div class="table-responsive">
+                <table id="successTable" class="table table-bordered table-striped">
+                    <thead>
+                        <tr id="tableHead"></tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}
+
+{% block javascripts %}
+<script>
+
+    $(document).ready(function () {
+
+        $("#fileSelect").select2({
+            placeholder: "Search source file...",
+            allowClear: true,
+            width: "100%"
+        });
+
+        loadSourceFiles();
+
+        $("#fileSelect").on("change", function () {
+            const fileName = $(this).val();
+
+            if (!fileName) {
+                renderEmpty("Select a source file to view data");
+                return;
+            }
+
+            fetch(`/reports/success/?source_file_name=${encodeURIComponent(fileName)}`, {
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest"
+                }
+            })
+                .then(res => res.json())
+                .then(resp => {
+                    if (!resp.success || !resp.data.length) {
+                        renderEmpty("No SUCCESS invoices found");
+                        return;
+                    }
+                    renderTable(resp.data);
+                });
+        });
+    });
+
+    function loadSourceFiles() {
+        fetch("/reports/success/", {
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+        })
+            .then(res => res.json())
+            .then(resp => {
+                if (!resp.success) return;
+
+                const select = $("#fileSelect");
+                select.empty().append(`<option></option>`);
+
+                resp.source_files.forEach(f => {
+                    select.append(new Option(f.source_file_name, f.source_file_name));
+                });
+
+                select.trigger("change.select2");
+            });
+    }
+
+    document.getElementById("fileSelect").addEventListener("change", function () {
+        const fileName = this.value;
+
+        if (!fileName) {
+            renderEmpty("Select a source file to view data");
+            return;
+        }
+
+        fetch(`/reports/success/?source_file_name=${encodeURIComponent(fileName)}`, {
+            headers: {
+                "X-Requested-With": "XMLHttpRequest"
+            }
+        })
+            .then(res => res.json())
+            .then(resp => {
+                if (!resp.success || !resp.data.length) {
+                    renderEmpty("No SUCCESS invoices found for this file");
+                    return;
+                }
+                renderTable(resp.data);
+            })
+            .catch(err => {
+                console.error("Invoice load error:", err);
+                renderEmpty("Failed to load data");
+            });
+    });
+
+
+    $('#userSelect').select2({
+        placeholder: "Search User...",
+        allowClear: true,
+        width: '100%'
+    });
+
+    $('#userSelect').on('select2:select', function () {
+        const userId = $(this).val();
+        if (!userId) return;
+
+        Swal.fire({
+            title: 'Loading Menu...',
+            didOpen: () => Swal.showLoading(),
+            showConfirmButton: false
+        });
+
+        fetchUserPermissions(userId);
+    });
+    $('#userSelect').on('select2:unselect', function () {
+        $('#permissionForm').hide();
+        $('#assignedMenusSection').hide();
+        $('.menu-checkbox').prop('checked', false);
+        table.clear().draw();
+    });
+
+
+    let dataTable = null;
+
+    function renderTable(rows) {
+        const table = $("#successTable");
+
+        if ($.fn.DataTable.isDataTable(table)) {
+            table.DataTable().clear().destroy();
+        }
+
+        $("#tableHead").empty();
+        $("#tableBody").empty();
+
+        $("#tableHead").append("<th>S.No</th>");
+
+        const keys = Object.keys(rows[0].extracted_data);
+        keys.forEach(k => {
+            $("#tableHead").append(`<th>${escapeHtml(k)}</th>`);
+        });
+
+        rows.forEach(() => {
+            let tr = "<tr><td></td>";
+            keys.forEach(k => {
+                tr += `<td></td>`;
+            });
+            tr += "</tr>";
+            $("#tableBody").append(tr);
+        });
+
+        dataTable = table.DataTable({
+            pageLength: 10,
+            ordering: true,
+            searching: true,
+            responsive: true,
+            columnDefs: [
+                { targets: 0, orderable: false, searchable: false }
+            ],
+            language: {
+                emptyTable: "No SUCCESS invoices found"
+            }
+        });
+
+        dataTable.rows().every(function (rowIdx) {
+            const row = rows[rowIdx];
+            const rowData = [];
+            keys.forEach(k => rowData.push(escapeHtml(row.extracted_data[k] ?? "-")));
+            this.data([null, ...rowData]);
+        });
+
+        dataTable.on("order.dt search.dt", function () {
+            dataTable.column(0, { search: "applied", order: "applied" })
+                .nodes()
+                .each((cell, i) => {
+                    cell.innerHTML = i + 1;
+                });
+        }).draw();
+    }
+
+    function renderEmpty(message) {
+        if ($.fn.DataTable.isDataTable("#successTable")) {
+            $("#successTable").DataTable().clear().destroy();
+        }
+
+        $("#tableHead").html("<th>S.No</th>");
+        $("#tableBody").html(`
+        <tr>
+            <td class="text-center text-muted">${message}</td>
+        </tr>
+    `);
+    }
+
+    function escapeHtml(value) {
+        if (value === null || value === undefined) return "-";
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+</script>
+
+
+
+{% endblock javascripts %}

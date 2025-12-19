@@ -305,6 +305,7 @@ def menu_management(request):
         'Upload Management',
         'Custom Field Mapping',
         'Invoice Extraction',
+        'Reports',
     ]
 
     for menu_name in SYSTEM_MENUS:
@@ -871,3 +872,55 @@ def delete_invoice_extraction(request, invoice_id):
         "success": True,
         "message": "Invoice deleted successfully"
     })
+
+
+#################### Reports ######################
+
+@login_required(login_url="/")
+def success_report(request):
+    is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
+    source_file_name = request.GET.get("source_file_name")
+
+    if is_ajax:
+        if not source_file_name:
+            source_files = (
+                InvoiceExtraction.objects
+                .filter(status="SUCCESS")
+                .exclude(source_file_name__isnull=True)
+                .exclude(source_file_name="")
+                .values("source_file_name")
+                .distinct()
+                .order_by("-source_file_name")
+            )
+
+            return JsonResponse({
+                "success": True,
+                "source_files": list(source_files)
+            })
+        invoices = (
+            InvoiceExtraction.objects
+            .filter(
+                status="SUCCESS",
+                source_file_name=source_file_name
+            )
+            .order_by("-created_at")
+            .values("id", "extracted_data")
+        )
+
+        return JsonResponse({
+            "success": True,
+            "data": list(invoices)
+        })
+    return render(request, "pages/reports/success_report.html")
+
+@login_required(login_url="/")
+def duplicate_report(request):
+    extracted_invoices = InvoiceExtraction.objects.filter(status="DUPLICATE").order_by("-created_at")
+
+    return render(request, "pages/reports/duplicate_report.html", {"extracted_invoices": extracted_invoices})
+
+@login_required(login_url="/")
+def invalid_report(request):
+    extracted_invoices = InvoiceExtraction.objects.filter(status="INVALID").order_by("-created_at")
+
+    return render(request, "pages/reports/invalid_report.html", {"extracted_invoices": extracted_invoices})
