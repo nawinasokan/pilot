@@ -232,16 +232,6 @@ class InvoiceExtraction(AuditModel):
         help_text="Raw Gemini / LLM extraction output"
     )
 
-    attempt_count = models.PositiveSmallIntegerField(
-        default=1,
-        help_text="Number of LLM attempts"
-    )
-
-    tota_count = models.PositiveSmallIntegerField(
-        default=1,
-        help_text="Number of Input"
-    )
-
     last_error = models.TextField(
         null=True,
         blank=True,

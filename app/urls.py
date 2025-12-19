@@ -31,6 +31,7 @@ urlpatterns = [
     path("custom-field/delete/<int:field_id>/", delete_custom_field, name="delete_custom_field"),
 
     path("invoice-extraction/", invoice_extraction, name="invoice_extraction"), 
+    path("get_file_urls/", get_file_urls, name="get_file_urls"),
     path(
         'api/invoice-extraction/start/',
         start_invoice_extraction,

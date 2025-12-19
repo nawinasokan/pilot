@@ -22,9 +22,6 @@ def store_invoice_extraction(*, batch, source_file_name, source_file_url, extrac
     - SAFE retry handling
     """
 
-    # ---------------------------------------------------
-    # 1️⃣ Enforce Custom Field Allowlist
-    # ---------------------------------------------------
     allowed_fields = set(
         CustomExtractionField.objects
         .filter(is_required=True)
@@ -40,14 +37,8 @@ def store_invoice_extraction(*, batch, source_file_name, source_file_url, extrac
         if key in allowed_fields
     }
 
-    # ---------------------------------------------------
-    # 2️⃣ Normalize CORE invoice fields
-    # ---------------------------------------------------
     core = normalize_core_invoice_fields(filtered_data)
 
-    # ---------------------------------------------------
-    # 3️⃣ Build fingerprint (ONLY core fields)
-    # ---------------------------------------------------
     fingerprint = _fingerprint_from_core_fields(
         core["invoice_no"],
         core["gstin"],
@@ -55,9 +46,6 @@ def store_invoice_extraction(*, batch, source_file_name, source_file_url, extrac
         core["invoice_amount"],
     )
 
-    # ---------------------------------------------------
-    # 4️⃣ Store or update (SAFE dedupe)
-    # ---------------------------------------------------
     try:
         with transaction.atomic():
             return InvoiceExtraction.objects.create(
@@ -77,21 +65,13 @@ def store_invoice_extraction(*, batch, source_file_name, source_file_url, extrac
             )
 
     except IntegrityError:
-        # 👇 Duplicate invoice (same fingerprint)
         existing = InvoiceExtraction.objects.get(
             duplicate_fingerprint=fingerprint
         )
 
-        # 🔥 DO NOT overwrite SUCCESS
-        existing.attempt_count += 1
-        existing.tota_count += 1
-
-        # Optional: track last URL for audit
         existing.source_file_url = source_file_url
 
         existing.save(update_fields=[
-            "attempt_count",
-            "tota_count",
             "source_file_url",
         ])
 

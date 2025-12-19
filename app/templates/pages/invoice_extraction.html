@@ -44,11 +44,14 @@
                             <select id="fileSelect" class="form-select">
                                 <option></option>
                                 {% for file in files %}
-                                <option value="{{ file.id }}">
+                                <option value="{{ file.batch_id }}" data-filename="{{ file.file_name }}">
                                     {{ file.file_name }} ({{ file.batch_id }})
                                 </option>
                                 {% endfor %}
                             </select>
+
+
+
                         </div>
 
                         <div class="col-md-2 mb-3 d-flex align-items-end">
@@ -91,10 +94,19 @@
 {% endblock content %}
 
 {% block javascripts %}
-
 <script>
-    const API_URL = "/api/invoice-extraction/start/";
+    const API_URL = "/api/invoice-extraction/start/";   
+
     let selectedBatchId = null;
+    let selectedFileName = null;
+    let table;
+
+    function getCSRFToken() {
+        const cookie = document.cookie
+            .split("; ")
+            .find(row => row.startsWith("csrftoken="));
+        return cookie ? cookie.split("=")[1] : "";
+    }
 
     $(document).ready(function () {
 
@@ -104,25 +116,43 @@
             width: '100%'
         });
 
-        $('#fileSelect').on('select2:select', function () {
-            selectedBatchId = $(this).val();
+        $('#fileSelect').on('select2:select', function (e) {
+            const option = e.params.data.element;
+
+            selectedBatchId = option.value;
+            selectedFileName = option.dataset.filename;
+
+            console.log("📂 FILE SELECTED");
+            console.log("batch_id  =", selectedBatchId);
+            console.log("file_name =", selectedFileName);
+
             $('#extractBtn').prop('disabled', false);
         });
 
         $('#fileSelect').on('select2:unselect', function () {
             selectedBatchId = null;
+            selectedFileName = null;
             $('#extractBtn').prop('disabled', true);
         });
 
         $('#extractBtn').on('click', async function () {
 
-            if (!selectedBatchId) return;
+            if (!selectedBatchId || !selectedFileName) {
+                Swal.fire("Select a file first", "", "warning");
+                return;
+            }
 
             $('#extractBtn').prop('disabled', true);
 
             Swal.fire({
                 title: 'Invoice Extraction',
-                html: 'AI is processing invoices…<br>Please wait.',
+                html: `
+                    <div style="text-align:left">
+                        📂 <b>File:</b> ${selectedFileName}<br>
+                        📦 <b>Batch:</b> ${selectedBatchId}<br><br>
+                        🤖 AI is processing invoices…
+                    </div>
+                `,
                 allowOutsideClick: false,
                 didOpen: () => Swal.showLoading()
             });
@@ -135,7 +165,8 @@
                         "X-CSRFToken": getCSRFToken()
                     },
                     body: JSON.stringify({
-                        batch_id: selectedBatchId
+                        batch_id: selectedBatchId,
+                        file_name: selectedFileName   
                     })
                 });
 
@@ -148,20 +179,10 @@
 
                 Swal.close();
 
-                if (!response.ok) {
-                    Swal.fire({
-                        title: "Extraction Blocked",
-                        html: data.message || "Request failed",
-                        icon: "warning"
-                    });
-                    $('#extractBtn').prop('disabled', false);
-                    return;
-                }
-
-                if (!data.success) {
+                if (!response.ok || !data.success) {
                     Swal.fire({
                         title: "Extraction Failed",
-                        html: data.message || "Extraction could not be completed",
+                        html: data.message || "Request failed",
                         icon: "error"
                     });
                     $('#extractBtn').prop('disabled', false);
@@ -177,8 +198,7 @@
                 const html = `
                     <div style="text-align:left">
                         📦 <b>Total URLs:</b> ${data.total_urls}<br>
-                        🔍 <b>Processed:</b> ${results.length}<br><br>
-
+                        🔍 <b>Attempted:</b> ${results.length}<br><br>
                         ✅ <b>Success:</b> ${successCount}<br>
                         ⚠️ <b>Duplicate:</b> ${duplicateCount}<br>
                         ❌ <b>Failed:</b> ${failedCount}
@@ -191,15 +211,12 @@
                     icon: successCount > 0 ? "success" : "warning",
                     confirmButtonText: "OK"
                 }).then(() => {
-                    if (window.table) {
+                    if (table) {
                         table.ajax.reload(null, false);
                     }
                     $('#fileSelect').val(null).trigger('change');
                     $('#extractBtn').prop('disabled', true);
                 });
-
-
-                $('#extractBtn').prop('disabled', false);
 
             } catch (err) {
                 Swal.close();
@@ -213,73 +230,75 @@
         });
     });
 
-    function getCSRFToken() {
-        const cookie = document.cookie
-            .split("; ")
-            .find(row => row.startsWith("csrftoken="));
-        return cookie ? cookie.split("=")[1] : "";
-    }
-
-
-    let table;
 
     $(document).ready(function () {
 
         table = $('#invoiceTable').DataTable({
-            ajax: "{% url 'invoice_extraction_list' %}",
+            ajax: {
+                url: "{% url 'invoice_extraction_list' %}",
+                dataSrc: "data"   
+            },
 
             pageLength: 10,
             order: [[6, 'desc']],
             autoWidth: false,
-            // processing: true,
 
             columns: [
                 { data: "sl_no" },
                 { data: "batch_id" },
                 { data: "source_file_name" },
+
                 {
                     data: "status",
                     render: function (data) {
                         if (data === "SUCCESS") {
-                            return '<span class="badge bg-success">SUCCESS</span>';
+                            return '<span class="badge bg-success text-white">SUCCESS</span>';
                         }
                         if (data === "DUPLICATE") {
-                            return '<span class="badge bg-warning text-dark">DUPLICATE</span>';
+                            return '<span class="badge bg-warning text-white">DUPLICATE</span>';
                         }
                         if (data === "FAILED") {
-                            return '<span class="badge bg-danger">FAILED</span>';
+                            return '<span class="badge bg-danger text-white">FAILED</span>';
                         }
                         return data;
                     }
                 },
-                { data: "attempt_count" },
-                { data: "total_count" },
+
+                {
+                    data: "success_count",
+                },
+
+                {
+                    data: "total_processed",
+
+                },
+
                 {
                     data: "created_at",
                     render: function (data) {
                         if (!data) return "-";
-
                         const date = new Date(data);
-
                         return date.toLocaleDateString("en-GB", {
                             day: "2-digit",
                             month: "short",
                             year: "numeric"
                         });
                     }
-                }
-                ,
+                },
+
                 { data: "created_by" },
+
                 {
                     data: "id",
                     orderable: false,
                     render: function (id) {
                         return `
-                                <button class="delete-btn btn btn-inverse-danger btn-sm btn-icon delete-confirm d-inline-flex align-items-center justify-content-center mx-1 delete-invoice"
-                                    data-id="${id}">
-                                    <i class="ti-trash"></i>
-                                </button>
-                        `;
+                        <button
+                            class="delete-btn btn btn-inverse-danger btn-sm btn-icon delete-confirm d-inline-flex align-items-center justify-content-center mx-1 delete-invoice"
+                            data-id="${id}">
+                            <i class="ti-trash"></i>
+                        </button>
+                    `;
                     }
                 }
             ],
@@ -324,7 +343,6 @@
                 }
 
                 Swal.fire("Deleted!", "Invoice removed.", "success");
-
                 table.ajax.reload(null, false);
 
             } catch (err) {
@@ -332,8 +350,7 @@
             }
         });
     });
-
-
 </script>
+
 
 {% endblock javascripts %}

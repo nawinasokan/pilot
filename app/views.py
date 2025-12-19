@@ -1,3 +1,4 @@
+from fileinput import filename
 import json
 import os
 from time import time
@@ -637,63 +638,99 @@ def upload_management_delete(request, batch_id):
     })
 
 ################ Invoice  Extraction ######################
+
 @login_required(login_url="/")
 def invoice_extraction(request):
-    
-    completed_batch_ids = (
-        InvoiceExtraction.objects
-        .filter(status="SUCCESS")
-        .values_list("batch__batch_id", flat=True)
-        .distinct()
-    )
 
     qs = (
         UploadManagement.objects
-        .exclude(batch_id__in=completed_batch_ids)
         .filter(
             status="COMPLETED",
             link_status="VALID",
             file_url__isnull=False,
         )
         .exclude(file_url="")
-        .order_by("storage_path", "-updated_at")  
-        .distinct("storage_path")
+        .values("batch_id", "file_name", "storage_path")
+        .annotate(last_updated=Max("updated_at"))
+        .order_by("-last_updated")
     )
 
-    valid_files = []
-    invalid_files = []
-
-    for f in qs:
-        cleaned = normalize_url(f.file_url)
-        if cleaned:
-            f.file_url = cleaned
-            valid_files.append(f)
-        else:
-            invalid_files.append(f)
-
-    logger.info(f"📦 Total DB candidates: {qs.count()}")
-    logger.info(f"✅ Total VALID invoice URLs: {len(valid_files)}")
-    logger.warning(f"❌ Skipped invalid URLs: {len(invalid_files)}")
+    # print("\n========= INVOICE EXTRACTION PAGE =========")
+    # print(f"[TOTAL READY FILES] = {qs.count()}")
+    # print("==========================================\n")
 
     return render(
         request,
         "pages/invoice_extraction.html",
         {
-            "files": valid_files,
-            "invalid_count": len(invalid_files),
+            "files": qs,
+            "invalid_count": 0,
         }
     )
+
+
+@login_required(login_url="/")
+@require_POST
+def get_file_urls(request):
+    """
+    Return ALL VALID URLs for a given file_name + batch_id
+    """
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JsonResponse(
+            {"success": False, "message": "Invalid JSON"},
+            status=400,
+        )
+
+    batch_id = payload.get("batch_id")
+    file_name = payload.get("file_name")
+
+    if not batch_id or not file_name:
+        return JsonResponse(
+            {"success": False, "message": "batch_id and file_name required"},
+            status=400,
+        )
+
+    qs = (
+        UploadManagement.objects
+        .filter(
+            batch_id=batch_id,
+            file_name=file_name,
+            status="COMPLETED",
+            link_status="VALID",
+            file_url__isnull=False,
+        )
+        .exclude(file_url="")
+        .order_by("id")
+    )
+
+    urls = [obj.file_url for obj in qs]
+
+    # print("\n========= FILE URL FETCH =========")
+    # print(f"[BATCH] {batch_id}")
+    # print(f"[FILE ] {file_name}")
+    # print(f"[URLS ] {len(urls)}")
+    # for u in urls:
+    #     print(f"  - {u}")
+    # print("=================================\n")
+
+    return JsonResponse(
+        {
+            "success": True,
+            "batch_id": batch_id,
+            "file_name": file_name,
+            "total_urls": len(urls),
+            "urls": urls,
+        },
+        status=200,
+    )
+
 
 @login_required(login_url="/")
 @require_POST
 def start_invoice_extraction(request):
-    """
-    Batch-level invoice extraction using Gemini (google.genai).
-    """
 
-    # ---------------------------------------------------
-    # 1️⃣ Parse request
-    # ---------------------------------------------------
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except json.JSONDecodeError:
@@ -703,86 +740,53 @@ def start_invoice_extraction(request):
         )
 
     batch_id = payload.get("batch_id")
+    file_name = payload.get("file_name") 
+
     if not batch_id:
         return JsonResponse(
             {"success": False, "message": "batch_id is required"},
             status=400,
         )
 
-    logger.info(f"📥 Extraction requested for batch: {batch_id}")
+    # print("\n========= START INVOICE EXTRACTION =========")
+    # print("batch_id  =", batch_id)
+    # print("file_name =", file_name)
 
-    # ---------------------------------------------------
-    # 2️⃣ Fetch batch files
-    # ---------------------------------------------------
     batch_files = UploadManagement.objects.filter(
-    Q(batch_id=batch_id) | Q(id=batch_id),
-    link_status="VALID",
-    file_url__isnull=False,
-).exclude(file_url="")
+        batch_id=batch_id,          
+        file_name=file_name,        
+        link_status="VALID",
+        file_url__isnull=False,
+    ).exclude(file_url="")
 
 
     if not batch_files.exists():
+        # print("[ERROR] No VALID URLs found in batch")
         return JsonResponse(
             {"success": False, "message": "Batch exists but has no files"},
             status=404,
         )
 
-    # ---------------------------------------------------
-    # 3️⃣ Collect URLs (NO DEDUPE HERE)
-    # ---------------------------------------------------
-    urls = [obj.file_url for obj in batch_files if obj.file_url]
+    urls = [obj.file_url for obj in batch_files]
 
-    valid_urls, invalid_urls = filter_valid_invoice_urls(
-        urls,
-        dedupe=False  # 🔥 IMPORTANT: attempt all valid rows
-    )
+    # print(f"[DB ROWS FETCHED] = {len(urls)}")
 
-    logger.info(f"📦 Total URLs in batch (DB rows): {len(urls)}")
-    logger.info(f"🔁 URLs attempted for extraction: {len(valid_urls)}")
-    logger.warning(f"❌ Invalid URLs skipped: {len(invalid_urls)}")
+    for i, url in enumerate(urls, start=1):
+        print(f"[EXTRACTING {i}] {url}")
 
-    if not valid_urls:
-        return JsonResponse(
-            {
-                "success": False,
-                "message": "No valid invoice URLs found",
-                "invalid_urls": invalid_urls,
-            },
-            status=400,
-        )
+    # print("==========================================\n")
 
-    # ---------------------------------------------------
-    # 4️⃣ Build Gemini prompt
-    # ---------------------------------------------------
-    try:
-        prompt = build_invoice_prompt()
-    except ValueError as exc:
-        logger.warning(str(exc))
-        return JsonResponse(
-            {"success": False, "message": str(exc)},
-            status=400,
-        )
-    except Exception:
-        logger.exception("Prompt build failed")
-        return JsonResponse(
-            {
-                "success": False,
-                "message": "Internal error while building extraction prompt",
-            },
-            status=500,
-        )
-
-    # ---------------------------------------------------
-    # 5️⃣ Extraction loop + metrics
-    # ---------------------------------------------------
-    results = []
-    batch_obj = batch_files.first()
+    # ---------- Gemini prompt ----------
+    prompt = build_invoice_prompt()
 
     success = 0
     duplicates = 0
     failed = 0
+    results = []
 
-    for url in valid_urls:
+    batch_obj = batch_files.first()
+
+    for url in urls:
         try:
             response = client.models.generate_content(
                 model=GEMINI_MODEL,
@@ -808,75 +812,142 @@ def start_invoice_extraction(request):
 
             if record.status == "SUCCESS":
                 success += 1
-            else:
+            elif record.status == "DUPLICATE":
                 duplicates += 1
+            else:
+                failed += 1
+
 
             results.append({
                 "url": url,
-                "status": record.status,
+                "status": "SUCCESS",
                 "invoice_id": record.id,
             })
 
         except Exception as exc:
-            logger.exception(f"❌ Extraction failed for {url}")
             failed += 1
+            # print(f"[FAILED] url={url} | error={exc}")
+
             results.append({
                 "url": url,
                 "status": "FAILED",
                 "error": str(exc),
             })
 
-    # ---------------------------------------------------
-    # 6️⃣ Final response (CORRECT METRICS)
-    # ---------------------------------------------------
+    # print("========= EXTRACTION COMPLETE =========")
+    # print(f"SUCCESS   = {success}")
+    # print(f"DUPLICATE = {duplicates}")
+    # print(f"FAILED    = {failed}")
+    # print("======================================\n")
+
     return JsonResponse(
         {
             "success": True,
             "batch_id": batch_id,
-
-            # 🔢 Metrics
-            "total_urls": len(urls),          # DB rows
-            "attempted": len(valid_urls),     # Gemini calls
-            "success_count": success,         # New invoices
-            "duplicate_count": duplicates,    # Duplicate attempts
-            "failed_count": failed,           # Failed attempts
-
-            # 🧾 Details
-            "invalid_urls": invalid_urls,
+            "total_urls": len(urls),
+            "attempted": len(urls),
+            "success_count": success,
+            "duplicate_count": duplicates,
+            "failed_count": failed,
             "results": results,
         },
         status=200,
     )
 
-
+from django.db.models import OuterRef, Subquery
 @login_required(login_url="/")
 def invoice_extraction_list(request):
-    """
-    Returns invoice extraction results for DataTable
-    """
+
+    latest_invoice_per_file = (
+        InvoiceExtraction.objects
+        .filter(
+            source_file_name=OuterRef("source_file_name"),
+            batch=OuterRef("batch"),
+            created_by=request.user
+        )
+        .order_by("-created_at")
+        .values("id")[:1]
+    )
 
     qs = (
         InvoiceExtraction.objects
+        .filter(
+            id=Subquery(latest_invoice_per_file),
+            created_by=request.user
+        )
         .select_related("batch", "created_by")
-        .filter(created_by=request.user) 
         .order_by("-created_at")
     )
 
     data = []
     for index, inv in enumerate(qs, start=1):
+
+        success_count = InvoiceExtraction.objects.filter(
+            batch=inv.batch,
+            source_file_name=inv.source_file_name,
+            status="SUCCESS",
+            created_by=request.user
+        ).count()
+
+        duplicate_count = InvoiceExtraction.objects.filter(
+            batch=inv.batch,
+            source_file_name=inv.source_file_name,
+            status="DUPLICATE",
+            created_by=request.user
+        ).count()
+
+        failed_count = InvoiceExtraction.objects.filter(
+            batch=inv.batch,
+            source_file_name=inv.source_file_name,
+            status="FAILED",
+            created_by=request.user
+        ).count()
+
+        total_processed = success_count + duplicate_count + failed_count
+
         data.append({
-            "id": inv.id, 
+            "id": inv.id,
             "sl_no": index,
-            "batch_id": inv.batch.batch_id if inv.batch else "-",
+            "batch_id": inv.batch.batch_id,
             "source_file_name": inv.source_file_name,
             "status": inv.status,
-            "attempt_count": inv.attempt_count,
-            "total_count": inv.tota_count,
+            "success_count": success_count,
+            "duplicate_count": duplicate_count,
+            "failed_count": failed_count,
+            "total_processed": total_processed,
             "created_at": inv.created_at.strftime("%Y-%m-%d %H:%M"),
             "created_by": inv.created_by.username if inv.created_by else "-",
         })
 
-    return JsonResponse({"data": data})
+    batch_totals = (
+        InvoiceExtraction.objects
+        .filter(created_by=request.user)
+        .values("batch__batch_id")
+        .annotate(
+            total_processed=Count("id"),
+            success_count=Count("id", filter=Q(status="SUCCESS")),
+            duplicate_count=Count("id", filter=Q(status="DUPLICATE")),
+            failed_count=Count("id", filter=Q(status="FAILED")),
+        )
+    )
+
+    # print("\n========= BATCH TOTALS =========")
+    # for b in batch_totals:
+    #     print(
+    #         f"[BATCH={b['batch__batch_id']}] "
+    #         f"TOTAL={b['total_processed']} | "
+    #         f"SUCCESS={b['success_count']} | "
+    #         f"DUPLICATE={b['duplicate_count']} | "
+    #         f"FAILED={b['failed_count']}"
+    #     )
+    # print("================================\n")
+
+    return JsonResponse({
+        "data": data,
+        "batch_totals": list(batch_totals)  
+    })
+
+
 
 @login_required(login_url="/")
 @require_POST
@@ -898,7 +969,6 @@ def delete_invoice_extraction(request, invoice_id):
 
 
 #################### Reports ######################
-
 @login_required(login_url="/")
 def success_report(request):
     is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
