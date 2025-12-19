@@ -663,7 +663,8 @@ def invoice_extraction(request):
             file_url__isnull=False,
         )
         .exclude(file_url="")
-        .order_by("-updated_at")
+        .order_by("storage_path", "-updated_at")  
+        .distinct("storage_path")
     )
 
     valid_files = []
@@ -690,7 +691,6 @@ def invoice_extraction(request):
         }
     )
 
-
 @login_required(login_url="/")
 @require_POST
 def start_invoice_extraction(request):
@@ -698,6 +698,9 @@ def start_invoice_extraction(request):
     Batch-level invoice extraction using Gemini (google.genai).
     """
 
+    # ---------------------------------------------------
+    # 1️⃣ Parse request
+    # ---------------------------------------------------
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except json.JSONDecodeError:
@@ -715,9 +718,15 @@ def start_invoice_extraction(request):
 
     logger.info(f"📥 Extraction requested for batch: {batch_id}")
 
+    # ---------------------------------------------------
+    # 2️⃣ Fetch batch files
+    # ---------------------------------------------------
     batch_files = UploadManagement.objects.filter(
-        Q(batch_id=batch_id) | Q(id=batch_id)
-    )
+    Q(batch_id=batch_id) | Q(id=batch_id),
+    link_status="VALID",
+    file_url__isnull=False,
+).exclude(file_url="")
+
 
     if not batch_files.exists():
         return JsonResponse(
@@ -725,11 +734,18 @@ def start_invoice_extraction(request):
             status=404,
         )
 
+    # ---------------------------------------------------
+    # 3️⃣ Collect URLs (NO DEDUPE HERE)
+    # ---------------------------------------------------
     urls = [obj.file_url for obj in batch_files if obj.file_url]
-    valid_urls, invalid_urls = filter_valid_invoice_urls(urls)
 
-    logger.info(f"📦 Total URLs in batch: {len(urls)}")
-    logger.info(f"✅ Valid invoice URLs: {len(valid_urls)}")
+    valid_urls, invalid_urls = filter_valid_invoice_urls(
+        urls,
+        dedupe=False  # 🔥 IMPORTANT: attempt all valid rows
+    )
+
+    logger.info(f"📦 Total URLs in batch (DB rows): {len(urls)}")
+    logger.info(f"🔁 URLs attempted for extraction: {len(valid_urls)}")
     logger.warning(f"❌ Invalid URLs skipped: {len(invalid_urls)}")
 
     if not valid_urls:
@@ -742,19 +758,17 @@ def start_invoice_extraction(request):
             status=400,
         )
 
+    # ---------------------------------------------------
+    # 4️⃣ Build Gemini prompt
+    # ---------------------------------------------------
     try:
         prompt = build_invoice_prompt()
-
     except ValueError as exc:
         logger.warning(str(exc))
         return JsonResponse(
-            {
-                "success": False,
-                "message": str(exc),
-            },
+            {"success": False, "message": str(exc)},
             status=400,
         )
-
     except Exception:
         logger.exception("Prompt build failed")
         return JsonResponse(
@@ -765,18 +779,21 @@ def start_invoice_extraction(request):
             status=500,
         )
 
-
+    # ---------------------------------------------------
+    # 5️⃣ Extraction loop + metrics
+    # ---------------------------------------------------
     results = []
     batch_obj = batch_files.first()
+
+    success = 0
+    duplicates = 0
+    failed = 0
 
     for url in valid_urls:
         try:
             response = client.models.generate_content(
                 model=GEMINI_MODEL,
-                contents=[
-                    prompt,
-                    url,   
-                ]
+                contents=[prompt, url]
             )
 
             raw_text = (response.text or "").strip()
@@ -796,35 +813,48 @@ def start_invoice_extraction(request):
                 extracted_data=extracted_data,
             )
 
-            results.append(
-                {
-                    "url": url,
-                    "status": record.status,
-                    "invoice_id": record.id,
-                }
-            )
+            if record.status == "SUCCESS":
+                success += 1
+            else:
+                duplicates += 1
+
+            results.append({
+                "url": url,
+                "status": record.status,
+                "invoice_id": record.id,
+            })
 
         except Exception as exc:
             logger.exception(f"❌ Extraction failed for {url}")
-            results.append(
-                {
-                    "url": url,
-                    "status": "FAILED",
-                    "error": str(exc),
-                }
-            )
+            failed += 1
+            results.append({
+                "url": url,
+                "status": "FAILED",
+                "error": str(exc),
+            })
 
+    # ---------------------------------------------------
+    # 6️⃣ Final response (CORRECT METRICS)
+    # ---------------------------------------------------
     return JsonResponse(
         {
             "success": True,
             "batch_id": batch_id,
-            "total_urls": len(urls),
-            "valid_urls": len(valid_urls),
+
+            # 🔢 Metrics
+            "total_urls": len(urls),          # DB rows
+            "attempted": len(valid_urls),     # Gemini calls
+            "success_count": success,         # New invoices
+            "duplicate_count": duplicates,    # Duplicate attempts
+            "failed_count": failed,           # Failed attempts
+
+            # 🧾 Details
             "invalid_urls": invalid_urls,
             "results": results,
         },
         status=200,
     )
+
 
 @login_required(login_url="/")
 def invoice_extraction_list(request):

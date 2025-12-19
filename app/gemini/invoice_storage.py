@@ -18,12 +18,12 @@ def store_invoice_extraction(*, batch, source_file_name, source_file_url, extrac
     """
     Stores invoice extraction with:
     - STRICT custom field enforcement
-    - FIXED duplicate logic (4 core invoice fields)
-    - SAFE DB-level deduplication
+    - CORE-field-only deduplication
+    - SAFE retry handling
     """
 
     # ---------------------------------------------------
-    # 1️⃣ Enforce Custom Field Allowlist (HARD FILTER)
+    # 1️⃣ Enforce Custom Field Allowlist
     # ---------------------------------------------------
     allowed_fields = set(
         CustomExtractionField.objects
@@ -31,11 +31,9 @@ def store_invoice_extraction(*, batch, source_file_name, source_file_url, extrac
         .values_list("name", flat=True)
     )
 
-    # If no custom fields exist → block extraction
     if not allowed_fields:
         raise ValueError("No custom extraction fields configured")
 
-    # Drop any extra keys returned by Gemini
     filtered_data = {
         key: value
         for key, value in extracted_data.items()
@@ -43,12 +41,12 @@ def store_invoice_extraction(*, batch, source_file_name, source_file_url, extrac
     }
 
     # ---------------------------------------------------
-    # 2️⃣ Normalize ONLY the 4 CORE invoice fields
+    # 2️⃣ Normalize CORE invoice fields
     # ---------------------------------------------------
     core = normalize_core_invoice_fields(filtered_data)
 
     # ---------------------------------------------------
-    # 3️⃣ Build duplicate fingerprint (CORE FIELDS ONLY)
+    # 3️⃣ Build fingerprint (ONLY core fields)
     # ---------------------------------------------------
     fingerprint = _fingerprint_from_core_fields(
         core["invoice_no"],
@@ -58,7 +56,7 @@ def store_invoice_extraction(*, batch, source_file_name, source_file_url, extrac
     )
 
     # ---------------------------------------------------
-    # 4️⃣ Store in DB (with duplicate protection)
+    # 4️⃣ Store or update (SAFE dedupe)
     # ---------------------------------------------------
     try:
         with transaction.atomic():
@@ -67,25 +65,34 @@ def store_invoice_extraction(*, batch, source_file_name, source_file_url, extrac
                 source_file_name=source_file_name,
                 source_file_url=source_file_url,
 
-                # Canonical fields (for search & reporting)
                 invoice_no=core["invoice_no"],
                 invoice_supplier_gstin_number=core["gstin"],
                 invoice_date=core["invoice_date"],
                 invoice_amount=core["invoice_amount"],
 
                 duplicate_fingerprint=fingerprint,
-
-                # Only allowed custom fields are stored
                 extracted_data=filtered_data,
 
                 status="SUCCESS",
             )
 
     except IntegrityError:
-        # Duplicate detected by DB unique constraint
+        # 👇 Duplicate invoice (same fingerprint)
         existing = InvoiceExtraction.objects.get(
             duplicate_fingerprint=fingerprint
         )
-        existing.status = "DUPLICATE"
-        existing.save(update_fields=["status"])
+
+        # 🔥 DO NOT overwrite SUCCESS
+        existing.attempt_count += 1
+        existing.tota_count += 1
+
+        # Optional: track last URL for audit
+        existing.source_file_url = source_file_url
+
+        existing.save(update_fields=[
+            "attempt_count",
+            "tota_count",
+            "source_file_url",
+        ])
+
         return existing

@@ -31,20 +31,24 @@ def normalize_url(url: str) -> str | None:
     return url
 
 
-def filter_valid_invoice_urls(urls: list[str]) -> tuple[list[str], list[str]]:
-    """
-    Returns:
-        valid_urls   -> list of cleaned valid URLs
-        invalid_urls -> list of rejected URLs (for logging/audit)
-    """
+def filter_valid_invoice_urls(urls, dedupe=True):
     valid = []
     invalid = []
+    seen = set()
 
     for url in urls:
         cleaned = normalize_url(url)
-        if cleaned:
-            valid.append(cleaned)
-        else:
+
+        if not cleaned:
             invalid.append(url)
+            continue
+
+        if dedupe:
+            if cleaned in seen:
+                continue
+            seen.add(cleaned)
+
+        valid.append(cleaned)
 
     return valid, invalid
+
