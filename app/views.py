@@ -645,10 +645,17 @@ def upload_management_delete(request, batch_id):
 ################ Invoice  Extraction ######################
 @login_required(login_url="/")
 def invoice_extraction(request):
+    
+    completed_batch_ids = (
+        InvoiceExtraction.objects
+        .filter(status="SUCCESS")
+        .values_list("batch__batch_id", flat=True)
+        .distinct()
+    )
 
-    # 1️⃣ Fetch only cheap DB-level filters
     qs = (
         UploadManagement.objects
+        .exclude(batch_id__in=completed_batch_ids)
         .filter(
             status="COMPLETED",
             link_status="VALID",
@@ -661,27 +668,17 @@ def invoice_extraction(request):
     valid_files = []
     invalid_files = []
 
-    # 2️⃣ Hard validation in Python
     for f in qs:
         cleaned = normalize_url(f.file_url)
         if cleaned:
-            f.file_url = cleaned  # normalize for frontend usage
+            f.file_url = cleaned
             valid_files.append(f)
         else:
             invalid_files.append(f)
 
-    # 3️⃣ Debug / audit logs
     logger.info(f"📦 Total DB candidates: {qs.count()}")
     logger.info(f"✅ Total VALID invoice URLs: {len(valid_files)}")
     logger.warning(f"❌ Skipped invalid URLs: {len(invalid_files)}")
-
-    for f in valid_files:
-        print(
-            f"➡ ID={f.id} | "
-            f"BATCH={f.batch_id} | "
-            f"FILE={f.file_name} | "
-            f"URL={f.file_url}"
-        )
 
     return render(
         request,
@@ -700,7 +697,6 @@ def start_invoice_extraction(request):
     Batch-level invoice extraction using Gemini (google.genai).
     """
 
-    # ------------------ Parse Request ------------------
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except json.JSONDecodeError:
@@ -718,7 +714,6 @@ def start_invoice_extraction(request):
 
     logger.info(f"📥 Extraction requested for batch: {batch_id}")
 
-    # ------------------ Fetch Batch Records ------------------
     batch_files = UploadManagement.objects.filter(
         Q(batch_id=batch_id) | Q(id=batch_id)
     )
@@ -729,7 +724,6 @@ def start_invoice_extraction(request):
             status=404,
         )
 
-    # ------------------ Collect & Filter URLs ------------------
     urls = [obj.file_url for obj in batch_files if obj.file_url]
     valid_urls, invalid_urls = filter_valid_invoice_urls(urls)
 
@@ -747,7 +741,6 @@ def start_invoice_extraction(request):
             status=400,
         )
 
-    # ------------------ Build Prompt ------------------
     try:
         prompt = build_invoice_prompt()
 
@@ -772,7 +765,6 @@ def start_invoice_extraction(request):
         )
 
 
-    # ------------------ Process Each Invoice ------------------
     results = []
     batch_obj = batch_files.first()
 
@@ -782,7 +774,7 @@ def start_invoice_extraction(request):
                 model=GEMINI_MODEL,
                 contents=[
                     prompt,
-                    url,   # ✅ image/PDF URL
+                    url,   
                 ]
             )
 
@@ -821,7 +813,6 @@ def start_invoice_extraction(request):
                 }
             )
 
-    # ------------------ Final Response ------------------
     return JsonResponse(
         {
             "success": True,
@@ -833,3 +824,31 @@ def start_invoice_extraction(request):
         },
         status=200,
     )
+
+@login_required(login_url="/")
+def invoice_extraction_list(request):
+    """
+    Returns invoice extraction results for DataTable
+    """
+
+    qs = (
+        InvoiceExtraction.objects
+        .select_related("batch", "created_by")
+        .filter(created_by=request.user) 
+        .order_by("-created_at")
+    )
+
+    data = []
+    for index, inv in enumerate(qs, start=1):
+        data.append({
+            "sl_no": index,
+            "batch_id": inv.batch.batch_id if inv.batch else "-",
+            "source_file_name": inv.source_file_name,
+            "status": inv.status,
+            "attempt_count": inv.attempt_count,
+            "total_count": inv.tota_count,
+            "created_at": inv.created_at.strftime("%Y-%m-%d %H:%M"),
+            "created_by": inv.created_by.username if inv.created_by else "-",
+        })
+
+    return JsonResponse({"data": data})

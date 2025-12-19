@@ -36,4 +36,9 @@ urlpatterns = [
         start_invoice_extraction,
         name='start_invoice_extraction'
     ),
+    path(
+        "api/invoice-extraction/list/",
+        invoice_extraction_list,
+        name="invoice_extraction_list",
+    ),
 ]

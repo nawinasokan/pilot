@@ -32,18 +32,14 @@
 {% block content %}
 <div class="grid-margin-sm-0">
     <div class="row">
-
         <div class="col-12 mb-4">
             <div class="card">
-
                 <div class="card-header">
                     <h6 class="card-title mb-0">Invoice Extraction</h6>
                 </div>
-
                 <div class="card-body">
-
                     <div class="row">
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-10 mb-3">
                             <label class="form-label">Select File / Batch</label>
 
                             <select id="fileSelect" class="form-select">
@@ -58,30 +54,52 @@
 
                         <div class="col-md-2 mb-3 d-flex align-items-end">
                             <button id="extractBtn" class="btn btn-primary w-100" disabled>
-                                Extract Invoice
+                                Submit
                             </button>
                         </div>
                     </div>
-
                 </div>
-
             </div>
         </div>
-
     </div>
+
+
+    <div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <table id="invoiceTable" class="table table-bordered table-striped w-100">
+                    <thead>
+                        <tr>
+                            <th>S No.</th>
+                            <th>Batch ID</th>
+                            <th>Source File</th>
+                            <th>Status</th>
+                            <th>Success Count</th>
+                            <th>Total Count</th>
+                            <th>Created At</th>
+                            <th>Created By</th>
+                        </tr>
+                    </thead>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+
 </div>
 
 {% endblock content %}
 
 {% block javascripts %}
-<script src="{% static 'vendors/select2/select2.min.js' %}"></script>
+
 <script>
     const API_URL = "/api/invoice-extraction/start/";
     let selectedBatchId = null;
 
     $(document).ready(function () {
 
-        // ---------------- Select2 Init ----------------
         $('#fileSelect').select2({
             placeholder: "Search file or batch...",
             allowClear: true,
@@ -98,7 +116,6 @@
             $('#extractBtn').prop('disabled', true);
         });
 
-        // ---------------- Extract Button ----------------
         $('#extractBtn').on('click', async function () {
 
             if (!selectedBatchId) return;
@@ -133,7 +150,6 @@
 
                 Swal.close();
 
-                // ---------------- 400 / 500 Handling ----------------
                 if (!response.ok) {
                     Swal.fire({
                         title: "Extraction Blocked",
@@ -144,7 +160,6 @@
                     return;
                 }
 
-                // ---------------- API Logical Failure ----------------
                 if (!data.success) {
                     Swal.fire({
                         title: "Extraction Failed",
@@ -155,7 +170,6 @@
                     return;
                 }
 
-                // ---------------- Batch Result Handling ----------------
                 const results = data.results || [];
 
                 const successCount   = results.filter(r => r.status === "SUCCESS").length;
@@ -193,13 +207,61 @@
         });
     });
 
-    // ---------------- CSRF Helper ----------------
     function getCSRFToken() {
         const cookie = document.cookie
             .split("; ")
             .find(row => row.startsWith("csrftoken="));
         return cookie ? cookie.split("=")[1] : "";
     }
+
+
+    let invoiceTable;
+
+    function loadInvoiceTable() {
+        if (invoiceTable) {
+            invoiceTable.ajax.reload(null, false);
+            return;
+        }
+
+        invoiceTable = $('#invoiceTable').DataTable({
+            ajax: {
+                url: "/api/invoice-extraction/list/",
+                dataSrc: "data"
+            },
+            columns: [
+                { data: "sl_no" },
+                { data: "batch_id" },
+                { data: "source_file_name" },
+                {
+                    data: "status",
+                    render: function (data) {
+                        if (data === "SUCCESS") {
+                            return '<span class="badge bg-success text-white">SUCCESS</span>';
+                        }
+                        if (data === "DUPLICATE") {
+                            return '<span class="badge bg-warning text-white">DUPLICATE</span>';
+                        }
+                        if (data === "FAILED") {
+                            return '<span class="badge bg-danger text-white">FAILED</span>';
+                        }
+                        return data;
+                    }
+                },
+                { data: "attempt_count" },
+                { data: "total_count" },
+                { data: "created_at" },
+                { data: "created_by" }
+            ],
+            order: [[5, "desc"]],
+            responsive: true,
+            pageLength: 10
+        });
+    }
+
+    $(document).ready(function () {
+        loadInvoiceTable();
+    });
+
 </script>
 
 {% endblock javascripts %}

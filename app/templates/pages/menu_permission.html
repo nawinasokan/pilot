@@ -180,7 +180,6 @@ $(document).ready(function () {
     });
 
     if (response.is_admin) {
-        // 🔒 LOCK UI
         $('.menu-checkbox').prop('disabled', true);
         $('#permissionForm button[type="submit"]').hide();
     } else {
