@@ -841,6 +841,7 @@ def invoice_extraction_list(request):
     data = []
     for index, inv in enumerate(qs, start=1):
         data.append({
+            "id": inv.id, 
             "sl_no": index,
             "batch_id": inv.batch.batch_id if inv.batch else "-",
             "source_file_name": inv.source_file_name,
@@ -852,3 +853,21 @@ def invoice_extraction_list(request):
         })
 
     return JsonResponse({"data": data})
+
+@login_required(login_url="/")
+@require_POST
+def delete_invoice_extraction(request, invoice_id):
+    """
+    Deletes a single invoice extraction record
+    """
+    invoice = get_object_or_404(
+        InvoiceExtraction,
+        id=invoice_id
+    )
+
+    invoice.delete()
+
+    return JsonResponse({
+        "success": True,
+        "message": "Invoice deleted successfully"
+    })

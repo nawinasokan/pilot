@@ -61,33 +61,32 @@
                 </div>
             </div>
         </div>
-    </div>
 
 
-    <div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <table id="invoiceTable" class="table table-bordered table-striped w-100">
-                    <thead>
-                        <tr>
-                            <th>S No.</th>
-                            <th>Batch ID</th>
-                            <th>Source File</th>
-                            <th>Status</th>
-                            <th>Success Count</th>
-                            <th>Total Count</th>
-                            <th>Created At</th>
-                            <th>Created By</th>
-                        </tr>
-                    </thead>
-                </table>
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="invoiceTable" class="table table-hover table-striped">
+                            <thead>
+                                <tr>
+                                    <th>S No.</th>
+                                    <th>Batch ID</th>
+                                    <th>Source File</th>
+                                    <th>Status</th>
+                                    <th>Success Count</th>
+                                    <th>Total Count</th>
+                                    <th>Created At</th>
+                                    <th>Created By</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-</div>
-
-
 </div>
 
 {% endblock content %}
@@ -172,9 +171,9 @@
 
                 const results = data.results || [];
 
-                const successCount   = results.filter(r => r.status === "SUCCESS").length;
+                const successCount = results.filter(r => r.status === "SUCCESS").length;
                 const duplicateCount = results.filter(r => r.status === "DUPLICATE").length;
-                const failedCount    = results.filter(r => r.status === "FAILED").length;
+                const failedCount = results.filter(r => r.status === "FAILED").length;
 
                 const html = `
                     <div style="text-align:left">
@@ -215,19 +214,18 @@
     }
 
 
-    let invoiceTable;
+    let table;
 
-    function loadInvoiceTable() {
-        if (invoiceTable) {
-            invoiceTable.ajax.reload(null, false);
-            return;
-        }
+    $(document).ready(function () {
 
-        invoiceTable = $('#invoiceTable').DataTable({
-            ajax: {
-                url: "/api/invoice-extraction/list/",
-                dataSrc: "data"
-            },
+        table = $('#invoiceTable').DataTable({
+            ajax: "{% url 'invoice_extraction_list' %}",
+
+            pageLength: 10,
+            order: [[6, 'desc']],
+            autoWidth: false,
+            processing: true,
+
             columns: [
                 { data: "sl_no" },
                 { data: "batch_id" },
@@ -236,13 +234,13 @@
                     data: "status",
                     render: function (data) {
                         if (data === "SUCCESS") {
-                            return '<span class="badge bg-success text-white">SUCCESS</span>';
+                            return '<span class="badge bg-success">SUCCESS</span>';
                         }
                         if (data === "DUPLICATE") {
-                            return '<span class="badge bg-warning text-white">DUPLICATE</span>';
+                            return '<span class="badge bg-warning text-dark">DUPLICATE</span>';
                         }
                         if (data === "FAILED") {
-                            return '<span class="badge bg-danger text-white">FAILED</span>';
+                            return '<span class="badge bg-danger">FAILED</span>';
                         }
                         return data;
                     }
@@ -250,17 +248,70 @@
                 { data: "attempt_count" },
                 { data: "total_count" },
                 { data: "created_at" },
-                { data: "created_by" }
+                { data: "created_by" },
+                {
+                    data: "id",
+                    orderable: false,
+                    render: function (id) {
+                        return `
+                                <button class="delete-btn btn btn-inverse-danger btn-sm btn-icon delete-confirm d-inline-flex align-items-center justify-content-center mx-1 delete-invoice"
+                                    data-id="${id}">
+                                    <i class="ti-trash"></i>
+                                </button>
+                        `;
+                    }
+                }
             ],
-            order: [[5, "desc"]],
-            responsive: true,
-            pageLength: 10
-        });
-    }
 
-    $(document).ready(function () {
-        loadInvoiceTable();
+            columnDefs: [
+                { targets: [0, 6], orderable: false }
+            ]
+        });
     });
+
+
+    $('#invoiceTable').on('click', '.delete-invoice', function () {
+
+    const invoiceId = $(this).data('id');
+
+    Swal.fire({
+        title: "Delete Invoice?",
+        text: "This action cannot be undone.",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#d33",
+        confirmButtonText: "Yes, delete"
+    }).then(async (result) => {
+
+        if (!result.isConfirmed) return;
+
+        try {
+            const res = await fetch(
+                `/api/invoice-extraction/delete/${invoiceId}/`,
+                {
+                    method: "POST",
+                    headers: {
+                        "X-CSRFToken": getCSRFToken()
+                    }
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.success) {
+                throw new Error(data.message || "Delete failed");
+            }
+
+            Swal.fire("Deleted!", "Invoice removed.", "success");
+
+            table.ajax.reload(null, false);
+
+        } catch (err) {
+            Swal.fire("Error", err.message, "error");
+        }
+    });
+});
+
 
 </script>
 

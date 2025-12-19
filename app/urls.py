@@ -41,4 +41,10 @@ urlpatterns = [
         invoice_extraction_list,
         name="invoice_extraction_list",
     ),
+
+    path(
+    "api/invoice-extraction/delete/<int:invoice_id>/",
+    delete_invoice_extraction,
+    name="delete_invoice_extraction"
+),
 ]
