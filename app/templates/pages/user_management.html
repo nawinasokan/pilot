@@ -11,7 +11,7 @@
     <div class="col-12 grid-margin stretch-card">
         <div class="card shadow-sm">
             <div class="card-header">
-                <h4 class="card-title">Add New User</h4>
+                <h4 class="card-title">User Management</h4>
             </div>
             <div class="card-body">
                 <form method="POST" id="createUserForm">
@@ -68,6 +68,7 @@
                                 <th>Role</th>
                                 <th>Location</th>
                                 <th>Status</th>
+                                <th>Create By</th>
                                 <th>Created At</th>
                                 <th class="text-center">Actions</th>
                             </tr>
@@ -134,8 +135,8 @@
                                     <label class="badge badge-danger">Inactive</label>
                                     {% endif %}
                                 </td>
+                                <td>{{ profile.created_by }}</td>
                                 <td>{{ profile.created_at|date:"d M Y" }}</td>
-
                                 <td class="text-center align-middle">
                                     <button type="button"
                                         class="btn btn-inverse-info btn-sm btn-icon d-inline-flex align-items-center justify-content-center mx-1 edit-btn"

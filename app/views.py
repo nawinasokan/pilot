@@ -447,9 +447,9 @@ def custom_field_mapping(request):
 
         return JsonResponse({"success": True})
 
-    fields = CustomExtractionField.objects.all().order_by("-created_at")
-    for field in fields:
-        print(field.name, field.field_type, field.is_required, field.created_at)
+    fields = CustomExtractionField.objects.all().order_by("created_at")
+    # for field in fields:
+    #     print(field.name, field.field_type, field.is_required, field.created_at)
     return render(request, "pages/custom_field_mapping.html", {
         "fields": fields,
         "field_types": CustomExtractionField.FIELD_TYPES

@@ -84,7 +84,6 @@
                         {% endfor %}
                     </div>
 
-                    <!-- SUBMIT BUTTON -->
                     <div class="mt-4 mb-5 text-center">
                         <button type="submit" class="btn btn-primary px-4">
                             Assign Menu
@@ -101,14 +100,13 @@
                                     <th>S.No</th>
                                     <th>User Name</th>
                                     <th>Menu Allocated</th>
-                                    <th>Created At</th>
                                     <th>Created By</th>
+                                    <th>Created At</th>
                                     <th>Action</th>
 
                                 </tr>
                             </thead>
                             <tbody id="assignedMenusBody">
-                                <!-- Filled by JS -->
                             </tbody>
                         </table>
                     </div>
@@ -124,171 +122,181 @@
 
 {% block javascripts %}
 
-
 <script>
-$(document).ready(function () {
+    $(document).ready(function () {
 
-    const csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
+        const csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
 
-    const table = $('#userTable').DataTable({
-        pageLength: 10,
-        order: [[2, 'desc']],
-        destroy: true,
-        autoWidth: false,
-        columnDefs: [
-            { targets: [0, 5], orderable: false }
-        ]
-    });
-
-    $('#userSelect').select2({
-        placeholder: "Search User...",
-        allowClear: true,
-        width: '100%'
-    });
-
-    $('#userSelect').on('select2:select', function () {
-        const userId = $(this).val();
-        if (!userId) return;
-
-        Swal.fire({
-            title: 'Loading Menu...',
-            didOpen: () => Swal.showLoading(),
-            showConfirmButton: false
+        const table = $('#userTable').DataTable({
+            pageLength: 10,
+            order: [[2, 'desc']],
+            destroy: true,
+            autoWidth: false,
+            columnDefs: [
+                { targets: [0, 5], orderable: false }
+            ]
         });
 
-        fetchUserPermissions(userId);
-    });
+        $('#userSelect').select2({
+            placeholder: "Search User...",
+            allowClear: true,
+            width: '100%'
+        });
 
-    $('#userSelect').on('select2:unselect', function () {
-        $('#permissionForm').hide();
-        $('#assignedMenusSection').hide();
-        $('.menu-checkbox').prop('checked', false);
-        table.clear().draw();
-    });
+        $('#userSelect').on('select2:select', function () {
+            const userId = $(this).val();
+            if (!userId) return;
 
-    window.fetchUserPermissions = function (userId) {
-        const url = "{% url 'get_user_menu_permissions' 0 %}".replace('0', userId);
+            fetchUserPermissions(userId);
+        });
 
-        $.get(url, function (response) {
+        $('#userSelect').on('select2:unselect', function () {
+            $('#permissionForm').hide();
+            $('#assignedMenusSection').hide();
+            $('.menu-checkbox').prop('checked', false);
+            table.clear().draw();
+        });
 
-    Swal.close();
+        window.fetchUserPermissions = function (userId) {
+            const url = "{% url 'get_user_menu_permissions' 0 %}".replace('0', userId);
 
-    $('.menu-checkbox').prop('checked', false);
+            $.get(url)
+                .done(function (response) {
 
-    response.menu_ids.forEach(id => {
-        $('.menu-checkbox[value="' + id + '"]').prop('checked', true);
-    });
+                    $('.menu-checkbox').prop('checked', false);
 
-    if (response.is_admin) {
-        $('.menu-checkbox').prop('disabled', true);
-        $('#permissionForm button[type="submit"]').hide();
-    } else {
-        $('.menu-checkbox').prop('disabled', false);
-        $('#permissionForm button[type="submit"]').show();
-    }
+                    response.menu_ids.forEach(id => {
+                        $('.menu-checkbox[value="' + id + '"]').prop('checked', true);
+                    });
 
-    $('#permissionForm').fadeIn();
-    $('#assignedMenusSection').fadeIn();
+                    if (response.is_admin) {
+                        $('.menu-checkbox').prop('disabled', true);
+                        $('#permissionForm button[type="submit"]').hide();
+                    } else {
+                        $('.menu-checkbox').prop('disabled', false);
+                        $('#permissionForm button[type="submit"]').show();
+                    }
 
-    renderAssignedUser(response);
-});
+                    $('#permissionForm').fadeIn();
+                    $('#assignedMenusSection').fadeIn();
 
-    }
+                    renderAssignedUser(response);
 
-    function renderAssignedUser(response) {
-        table.clear();
 
-        const menuNames = response.menus.map(m => m.name).join(', ');
 
-        table.row.add([
-            1,
-            response.username,
-            menuNames,
-            response.assigned_at,
-            response.created_by,
-            `
-            <button class="btn btn-inverse-danger btn-sm btn-icon delete-confirm d-inline-flex align-items-center justify-content-center mx-1"
+                    Swal.fire({
+                        title: 'Processing...',
+                        allowOutsideClick: false, timer: 600,
+                        didOpen: () => Swal.showLoading()
+                    });
+                })
+                .fail(function () {
+                    Swal.fire('Error', 'Failed to load menus', 'error');
+                });
+        };
+
+        function renderAssignedUser(response) {
+            table.clear();
+
+            const menuNames = response.menus.map(m => m.name).join(', ');
+
+            table.row.add([
+                1,
+                response.username,
+                menuNames,
+                response.created_by,
+                response.assigned_at,
+                `
+            <button class="btn btn-inverse-danger btn-sm btn-icon d-inline-flex align-items-center justify-content-center mx-1"
                 onclick="deleteUserAllMenus(${response.user_id})">
                 <i class="ti-trash"></i>
             </button>
             `
-        ]).draw();
-    }
+            ]).draw();
+        }
 
-    $('#permissionForm').on('submit', function (e) {
-        e.preventDefault();
+        $('#permissionForm').on('submit', function (e) {
+            e.preventDefault();
 
-        const userId = $('#userSelect').val();
-        if (!userId) return;
+            const userId = $('#userSelect').val();
+            if (!userId) return;
 
-        const selectedMenus = $('.menu-checkbox:checked')
-            .map(function () { return $(this).val(); })
-            .get();
-
-        Swal.fire({
-            title: 'Saving...',
-            didOpen: () => Swal.showLoading(),
-            showConfirmButton: false
-        });
-
-        $.ajax({
-            url: "{% url 'update_user_menu_permissions' %}",
-            type: 'POST',
-            data: {
-                user_id: userId,
-                menu_ids: selectedMenus,
-                csrfmiddlewaretoken: csrfToken
-            },
-            success: function (response) {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Saved!',
-                    timer: 1200,
-                    showConfirmButton: false
-                });
-
-                fetchUserPermissions(userId);
-            },
-            error: function () {
-                Swal.fire('Error', 'Could not save permissions', 'error');
-            }
-        });
-    });
-
-}); 
-
-
-window.deleteUserAllMenus = function (userId) {
-
-    Swal.fire({
-        title: 'Delete all menus?',
-        text: 'This will remove all menu permissions for this user',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        confirmButtonText: 'Yes, delete'
-    }).then(result => {
-
-        if (!result.isConfirmed) return;
-
-        $.post("{% url 'delete_user_all_menus' %}", {
-            user_id: userId,
-            csrfmiddlewaretoken: $('input[name="csrfmiddlewaretoken"]').val()
-        }, function () {
+            const selectedMenus = $('.menu-checkbox:checked')
+                .map(function () { return $(this).val(); })
+                .get();
 
             Swal.fire({
-                icon: 'success',
-                title: 'Deleted',
-                timer: 1200,
-                showConfirmButton: false
+                title: 'Processing...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
             });
 
-            $('#permissionForm').hide();
-            $('#assignedMenusSection').hide();
-            $('.menu-checkbox').prop('checked', false);
+            $.ajax({
+                url: "{% url 'update_user_menu_permissions' %}",
+                type: 'POST',
+                data: {
+                    user_id: userId,
+                    menu_ids: selectedMenus,
+                    csrfmiddlewaretoken: csrfToken
+                },
+                success: function () {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Saved!',
+                        timer: 1000,
+                        showConfirmButton: false
+                    });
+
+                    fetchUserPermissions(userId);
+                },
+                error: function () {
+                    Swal.fire('Error', 'Could not save permissions', 'error');
+                }
+            });
         });
+
     });
-};
+
+    window.deleteUserAllMenus = function (userId) {
+
+        Swal.fire({
+            title: 'Delete all menus?',
+            text: 'This will remove all menu permissions for this user',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Yes, delete'
+        }).then(result => {
+
+            if (!result.isConfirmed) return;
+
+            Swal.fire({
+                title: 'Processing...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            $.post("{% url 'delete_user_all_menus' %}", {
+                user_id: userId,
+                csrfmiddlewaretoken: $('input[name="csrfmiddlewaretoken"]').val()
+            })
+                .done(function () {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Deleted',
+                        timer: 1000,
+                        showConfirmButton: false
+                    });
+
+                    $('#permissionForm').hide();
+                    $('#assignedMenusSection').hide();
+                    $('.menu-checkbox').prop('checked', false);
+                })
+                .fail(function () {
+                    Swal.fire('Error', 'Delete failed', 'error');
+                });
+        });
+    };
 </script>
 
 

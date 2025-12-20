@@ -32,3 +32,27 @@
     -webkit-text-fill-color: transparent;
     -webkit-background-clip: text;
   }
+
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 50%;
+  background: #4b49ac;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 14px;
+}
+
+.user-avatar.sm {
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+}
+
+
