@@ -18,7 +18,7 @@ import re
 import shutil
 import pandas as pd
 from .thread_utils import run_in_thread
-from .services import process_uploaded_file
+from .services import calculate_file_hash, process_uploaded_file
 from django.db.models import Count, Q, Max
 from google import genai
 from app.gemini.builder import build_invoice_prompt
@@ -523,6 +523,7 @@ def upload_management_page(request):
         "uploads": uploads
     })
 
+
 @login_required(login_url="/")
 @require_POST
 def create_upload_management(request):
@@ -533,6 +534,17 @@ def create_upload_management(request):
         return JsonResponse(
             {"success": False, "message": "File and header required"},
             status=400
+        )
+
+    file_hash = calculate_file_hash(upload_file)
+
+    if UploadManagement.objects.filter(file_hash=file_hash).exists():
+        return JsonResponse(
+            {
+                "success": False,
+                "message": "This file has already been uploaded"
+            },
+            status=409
         )
 
     batch_id = generate_batch_id()
@@ -551,7 +563,8 @@ def create_upload_management(request):
         file_url=selected_header,   
         storage_path=file_path,
         status="PROCESSING",
-        created_by=request.user
+        created_by=request.user,
+        file_hash=file_hash           
     )
 
     run_in_thread(process_uploaded_file, upload.id)
@@ -601,6 +614,7 @@ def upload_management_list_api(request):
         })
 
     return JsonResponse({"data": data})
+
 
 @login_required(login_url='/')
 @require_POST

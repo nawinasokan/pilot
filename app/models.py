@@ -160,6 +160,14 @@ class UploadManagement(AuditModel):
         null=True, blank=True
     )
 
+    file_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,     
+        blank=True,
+        db_index=True
+    )
+
     class Meta:
         db_table = 'upload_management'
         verbose_name_plural = "Upload Management"

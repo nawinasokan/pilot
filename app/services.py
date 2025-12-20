@@ -7,6 +7,15 @@ import os
 
 ALLOWED_URL_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf", ".jfif"}
 
+import hashlib
+
+def calculate_file_hash(uploaded_file):
+    hasher = hashlib.sha256()
+    for chunk in uploaded_file.chunks():
+        hasher.update(chunk)
+    uploaded_file.seek(0) 
+    return hasher.hexdigest()
+
 def normalize_url(url: str) -> str:
     """
     Normalize URL coming from Excel / CSV
@@ -38,18 +47,19 @@ def is_valid_image_url(url: str) -> bool:
         return ext in ALLOWED_URL_EXTENSIONS
     except Exception:
         return False
+
 def process_uploaded_file(upload_id):
     close_old_connections()
 
     base = UploadManagement.objects.get(id=upload_id)
 
-    column_name = base.file_url        # header name
+    column_name = base.file_url      # header name
     file_path = base.storage_path
     batch_id = base.batch_id
 
     ext = os.path.splitext(file_path)[1].lower()
 
-    # ---------- Load file ----------
+    # ---------- LOAD FILE ----------
     if ext == ".csv":
         df = pd.read_csv(file_path, dtype=str)
     elif ext in [".xlsx", ".xls"]:
@@ -75,23 +85,17 @@ def process_uploaded_file(upload_id):
 
     with transaction.atomic():
 
-        # ---------- First value updates base row ----------
-        first_raw = raw_values[0]
-        first_url = normalize_url(first_raw)
-
-        if is_valid_image_url(first_url):
-            link_status = "VALID"
-        else:
-            link_status = "INVALID"
+        # ---------- FIRST ROW (parent update) ----------
+        first_url = normalize_url(raw_values[0])
 
         base.file_url = first_url
-        base.link_status = link_status
+        base.link_status = "VALID" if is_valid_image_url(first_url) else "INVALID"
         base.status = "COMPLETED"
         base.save(update_fields=["file_url", "link_status", "status"])
 
         seen.add(first_url)
 
-        # ---------- Remaining rows ----------
+        # ---------- CHILD ROWS ----------
         bulk_rows = []
 
         for raw in raw_values[1:]:
@@ -113,7 +117,9 @@ def process_uploaded_file(upload_id):
                     status="COMPLETED",
                     link_status=status,
                     created_by=base.created_by,
+                    file_hash=None   # 🔥 CRITICAL FIX
                 )
             )
 
-        UploadManagement.objects.bulk_create(bulk_rows)
+        if bulk_rows:
+            UploadManagement.objects.bulk_create(bulk_rows)

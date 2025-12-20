@@ -350,24 +350,46 @@
 
     let uploadStatusPoller = null;
 
-    function startUploadPolling() {
-        if (uploadStatusPoller) return;
+    function startUploadWithHeader(selectedHeader) {
 
-        uploadStatusPoller = setInterval(() => {
-            const table = $('#userTable').DataTable();
-            table.ajax.reload(null, false);
-            const hasProcessing = table
-                .rows()
-                .data()
-                .toArray()
-                .some(row => row.status === "PROCESSING");
+        const formData = new FormData();
+        formData.append("file", $('#uploadFile')[0].files[0]);
+        formData.append("selected_header", selectedHeader);
 
-            if (!hasProcessing) {
-                clearInterval(uploadStatusPoller);
-                uploadStatusPoller = null;
+        $.ajax({
+            url: "{% url 'create_upload_management' %}",
+            type: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: {
+                "X-CSRFToken": $('[name=csrfmiddlewaretoken]').val()
+            },
+            success: function (response) {
+                if (response.success) {
+                    Swal.fire("Success", "Upload started successfully", "success");
+
+                    resetUploadForm();
+
+                    $('#userTable').DataTable().ajax.reload(null, false);
+                    startUploadPolling();
+                } else {
+                    Swal.fire("Error", response.message, "error");
+                    resetUploadForm();
+                }
+            },
+            error: function (xhr) {
+                const msg =
+                    xhr.responseJSON?.message ||
+                    "Upload failed";
+
+                Swal.fire("Error", msg, "error");
+
+                resetUploadForm();
             }
-        }, 3000);
+        });
     }
+
 
     $(document).on('click', '.delete-btn', function () {
 
@@ -409,6 +431,14 @@
         });
     });
 
+    $('#headerPreviewModal').on('hidden.bs.modal', function () {
+        resetUploadForm();
+    });
 
+    function resetUploadForm() {
+        const fileInput = $('#uploadFile');
+        fileInput.val("");
+        fileInput.blur();
+    }
 </script>
 {% endblock javascripts %}
