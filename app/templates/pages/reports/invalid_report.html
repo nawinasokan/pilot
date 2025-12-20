@@ -97,7 +97,10 @@
             lengthMenu: [[5, 10, 25, 50, -1], [5, 10, 25, 50, "All"]],
             columnDefs: [
                 { orderable: false, targets: [5, 6] }
-            ]
+            ],
+            language: {
+                emptyTable: "No INVALID invoices found"
+            }
         });
 
         $("#batchSelect").on("change", function () {
@@ -108,8 +111,8 @@
                 return;
             }
 
-            fetch(`/api/invalid-report/${batch}/`, {
-                credentials: "same-origin"
+            fetch(`/report_invalid/?batch_id=${encodeURIComponent(batch)}`, {
+                headers: { "X-Requested-With": "XMLHttpRequest" }
             })
                 .then(res => res.json())
                 .then(resp => {
@@ -124,8 +127,8 @@
     });
 
     function loadBatches() {
-        fetch("/api/invalid-report/batches/", {
-            credentials: "same-origin"
+        fetch("/report_invalid/", {
+            headers: { "X-Requested-With": "XMLHttpRequest" }
         })
             .then(res => res.json())
             .then(resp => {
@@ -135,7 +138,9 @@
                 select.empty().append(`<option></option>`);
 
                 resp.batches.forEach(b => {
-                    select.append(new Option(`${b.file_name}`, b.batch_id));
+                    select.append(
+                        new Option(`${b.file_name}`, b.batch_id)
+                    );
                 });
 
                 select.trigger("change.select2");
@@ -157,7 +162,7 @@
                 r.uploaded_by,
                 r.uploaded_at,
                 `<span class="badge badge-danger text-white">${r.status}</span>`,
-                r.file_url,
+                `<a href="${r.file_url}" target="_blank">${r.file_url}</a>`
             ]);
         });
 
@@ -180,7 +185,9 @@
         csv.push(headers.join(","));
 
         invalidTable.rows({ search: "applied" }).every(function () {
-            const row = this.data().map(v => `"${String(v).replace(/"/g, '""')}"`);
+            const row = this.data().map(v =>
+                `"${String(v).replace(/"/g, '""')}"`
+            );
             csv.push(row.join(","));
         });
 
@@ -224,8 +231,8 @@
                 "File Name": r[2],
                 "Uploaded By": r[3],
                 "Uploaded At": r[4],
-                "Invalid URL": r[5],
-                "Status": r[6]
+                "Status": r[5],
+                "Invalid URL": r[6]
             });
         });
 
@@ -249,4 +256,5 @@
         URL.revokeObjectURL(a.href);
     }
 </script>
+
 {% endblock javascripts %}

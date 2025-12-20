@@ -1025,46 +1025,48 @@ def duplicate_report(request):
 
 @login_required(login_url="/")
 def report_invalid(request):
-    """Render Invalid Report UI"""
-    return render(request, "pages/reports/invalid_report.html")
 
-@login_required
-def get_all_batches(request):
-    batches = (
-        UploadManagement.objects
-        .filter(link_status="INVALID")
-        .values("batch_id")
-        .annotate(file_name=Max("file_name"))  
-        .order_by("-batch_id")
-    )
+    is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
+    batch_id = request.GET.get("batch_id")
 
-    return JsonResponse({
-        "success": True,
-        "batches": list(batches)
-    })
+    if is_ajax:
 
+        if not batch_id:
+            batches = (
+                UploadManagement.objects
+                .filter(link_status="INVALID")
+                .values("batch_id")
+                .annotate(file_name=Max("file_name"))
+                .order_by("-batch_id")
+            )
 
-@login_required
-def get_invalid_by_batch(request, batch_id):
-    records = (
-        UploadManagement.objects
-        .filter(batch_id=batch_id, link_status="INVALID")
-        .select_related("created_by")
-        .order_by("-created_at")
-    )
+            return JsonResponse({
+                "success": True,
+                "batches": list(batches)
+            })
 
-    rows = []
-    for r in records:
-        rows.append({
-            "batch_id": r.batch_id,
-            "file_name": r.file_name,
-            "uploaded_at": r.created_at.strftime("%Y-%m-%d %H:%M"),
-            "uploaded_by": r.created_by.username if r.created_by else "-",
-            "file_url": r.file_url,
-            "status": r.link_status,
+        records = (
+            UploadManagement.objects
+            .filter(batch_id=batch_id, link_status="INVALID")
+            .select_related("created_by")
+            .order_by("-created_at")
+        )
+
+        rows = [
+            {
+                "batch_id": r.batch_id,
+                "file_name": r.file_name,
+                "uploaded_by": r.created_by.username if r.created_by else "-",
+                "uploaded_at": r.created_at.strftime("%d %b %Y"),
+                "status": r.link_status,
+                "file_url": r.file_url,
+            }
+            for r in records
+        ]
+
+        return JsonResponse({
+            "success": True,
+            "rows": rows
         })
 
-    return JsonResponse({
-        "success": True,
-        "rows": rows
-    })
+    return render(request, "pages/reports/invalid_report.html")
