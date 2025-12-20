@@ -40,10 +40,9 @@ urlpatterns = [
 
     # ---------- INVOICE EXTRACTION ----------
     path("invoice-extraction/", invoice_extraction, name="invoice_extraction"),
-    path("invoice-extraction/file-urls/", get_file_urls, name="get_file_urls"),
-
     # ---------- API (PROCESSING ONLY) ----------
-    path("api/invoice-extraction/start/", start_invoice_extraction, name="start_invoice_extraction"),
+    path("api/invoice-extraction/start/", start_invoice_extraction, name="start_extraction"),
+    path("api/invoice-extraction/progress/<str:extraction_batch_id>/", get_extraction_progress, name="extraction_progress"),
     path("api/invoice-extraction/list/", invoice_extraction_list, name="invoice_extraction_list"),
     path("api/invoice-extraction/delete/<int:invoice_id>/", delete_invoice_extraction, name="delete_invoice_extraction"),
 

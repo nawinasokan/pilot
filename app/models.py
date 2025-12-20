@@ -175,100 +175,43 @@ class UploadManagement(AuditModel):
             models.Index(fields=['batch_id', 'link_status']),
         ]
 
-# ------------------- Invoice Extraction -------------------
-class InvoiceExtraction(AuditModel):
-    EXTRACTION_STATUS_CHOICES = [
-        ("PROCESSING", "Processing"),
-        ("SUCCESS", "Success"),
-        ("DUPLICATE", "Duplicate"),
-        ("FAILED", "Failed"),
+# ------------------- MASTER MODEL -------------------
+class ExtractionBatch(AuditModel):
+    STATUS_CHOICES = [
+        ('PROCESSING', 'Processing'),
+        ('COMPLETED', 'Completed'),
+        ('FAILED', 'Failed'),
     ]
+    upload_record = models.ForeignKey(UploadManagement, on_delete=models.CASCADE)
+    extraction_batch_id = models.CharField(max_length=100, unique=True, db_index=True)
+    file_name = models.CharField(max_length=255)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PROCESSING')
+    total_count = models.IntegerField(default=0)
+    processed_count = models.IntegerField(default=0)
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
 
-    batch = models.ForeignKey(
-        UploadManagement,
-        on_delete=models.CASCADE,
-        related_name="extractions",
-        db_index=True
-    )
+    @property
+    def progress_percentage(self):
+        if self.total_count == 0: return 0
+        return round((self.processed_count / self.total_count) * 100, 2)
 
-    source_file_name = models.CharField(
-        max_length=255,
-        help_text="Source Excel name"
-    )
-
-    source_file_url = models.URLField(
-        max_length=500,
-        help_text="URL"
-    )
-
-    invoice_no = models.CharField(
-        max_length=255,
-        null=True,
-        blank=True,
-        db_index=True
-    )
-
-    invoice_supplier_gstin_number = models.CharField(
-        max_length=50,
-        null=True,
-        blank=True,
-        db_index=True
-    )
-
-    invoice_date = models.DateField(
-        null=True,
-        blank=True,
-        db_index=True
-    )
-
-    invoice_amount = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
+# -------------------  DETAIL MODEL -------------------
+class InvoiceExtraction(AuditModel):
+    batch_master = models.ForeignKey(
+        ExtractionBatch, 
+        on_delete=models.CASCADE, 
+        related_name="invoices",
         null=True,
         blank=True
     )
-
-    duplicate_fingerprint = models.CharField(
-        max_length=255,
-        help_text="Hash(invoice_no + gstin + date + amount)"
-    )
-
-
-    extracted_data = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text="Raw Gemini / LLM extraction output"
-    )
-
-    last_error = models.TextField(
-        null=True,
-        blank=True,
-        help_text="Last extraction error if failed"
-    )
-
-    status = models.CharField(
-        max_length=20,
-        choices=EXTRACTION_STATUS_CHOICES,
-        default="PROCESSING",
-        db_index=True
-    )
-
-    class Meta:
-        db_table = "invoice_extractions"
-
-        constraints = [
-            models.UniqueConstraint(
-                fields=["duplicate_fingerprint"],
-                name="uniq_invoice_fingerprint"
-            )
-        ]
-
-        indexes = [
-            models.Index(fields=["batch", "status"]),
-            models.Index(fields=["invoice_no"]),
-            models.Index(fields=["invoice_supplier_gstin_number"]),
-            models.Index(fields=["invoice_date"]),
-        ]
-
-    def __str__(self):
-        return f"Invoice {self.invoice_no or 'UNKNOWN'} ({self.status})"
+    
+    source_file_name = models.CharField(max_length=255, db_index=True, null=True, blank=True)
+    source_file_url = models.URLField(max_length=500)
+    invoice_no = models.CharField(max_length=255, null=True, blank=True)
+    invoice_supplier_gstin_number = models.CharField(max_length=50, null=True, blank=True)
+    invoice_date = models.DateField(null=True, blank=True)
+    invoice_amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    extracted_data = models.JSONField(default=dict)
+    duplicate_fingerprint = models.CharField(max_length=255, unique=True)
+    status = models.CharField(max_length=20, default="SUCCESS")

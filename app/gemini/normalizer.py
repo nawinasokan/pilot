@@ -16,7 +16,6 @@ def normalize_core_invoice_fields(data: dict) -> dict:
         "invoice_amount": _decimal(data.get("Total Amount")),
     }
 
-
 def _str(v):
     return None if not v or v == "-" else str(v).strip()
 

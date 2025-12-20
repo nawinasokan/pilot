@@ -25,7 +25,7 @@ def normalize_url(url: str) -> str:
 
     return (
         str(url)
-        .replace("\xa0", "")   # non-breaking space
+        .replace("\xa0", "")   
         .replace("\n", "")
         .replace("\r", "")
         .strip()
@@ -53,7 +53,7 @@ def process_uploaded_file(upload_id):
 
     base = UploadManagement.objects.get(id=upload_id)
 
-    column_name = base.file_url      # header name
+    column_name = base.file_url      
     file_path = base.storage_path
     batch_id = base.batch_id
 
@@ -117,7 +117,7 @@ def process_uploaded_file(upload_id):
                     status="COMPLETED",
                     link_status=status,
                     created_by=base.created_by,
-                    file_hash=None   # 🔥 CRITICAL FIX
+                    file_hash=None   
                 )
             )
 
