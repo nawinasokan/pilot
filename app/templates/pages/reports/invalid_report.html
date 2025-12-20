@@ -1,22 +1,252 @@
 {% extends "layouts/base.html" %}
 
-{% block title %} Invalid Report {% endblock %}
+{% block title %}Invalid Invoice Report{% endblock %}
 
-<!-- Specific CSS goes HERE -->
-{% block stylesheets %}{% endblock stylesheets %}
+{% block stylesheets %}
+<style>
+    .select2-container {
+        width: 100% !important;
+    }
+
+    .select2-container--default .select2-selection--single {
+        height: 42px;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        padding-left: 14px;
+        color: #495057;
+        font-size: 14px;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 42px;
+    }
+</style>
+{% endblock stylesheets %}
+
 {% block content %}
-<div class="grid-margin-sm-0">
-    <div class="row">
-        <div class="col-12 col-xl-12 stretch-card">
-            <div class="card">
-                <div class="card-header">
-                    <h4 class="card-title">Invalid Report</h4>
+<div class="row">
+    <div class="col-12 grid-margin stretch-card">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h4 class="mb-0">Invalid Invoice Report</h4>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <select id="batchSelect" class="form-control">
+                            <option value="">Select Source File</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <p>Welcome to the Invalid Report!</p>
+            </div>
+
+            <div class="card-body">
+
+                <div class="d-flex justify-content-end mb-3 d-none" id="exportActions"
+                    style="display: none !important;">
+                    <button class="btn btn-primary mr-2" onclick="exportExcel()">Excel</button>
+                    <button class="btn btn-primary mr-2" onclick="exportCSV()">CSV</button>
+                    <button class="btn btn-primary" onclick="exportJSON()">JSON</button>
                 </div>
+
+                <div class="table-responsive d-none" id="tableContainer">
+                    <table id="invalidTable" class="table table-hover table-striped">
+                        <thead>
+                            <tr>
+                                <th>S.No</th>
+                                <th>Batch ID</th>
+                                <th>Uploaded File Name</th>
+                                <th>Uploaded By</th>
+                                <th>Uploaded At</th>
+                                <th>Status</th>
+                                <th>Invalid URL</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
             </div>
         </div>
     </div>
 </div>
 {% endblock content %}
+
+{% block javascripts %}
+<script>
+    let invalidTable = null;
+
+    $(document).ready(function () {
+
+        $("#batchSelect").select2({
+            placeholder: "Search batch...",
+            allowClear: true,
+            width: "100%"
+        });
+
+        loadBatches();
+
+        invalidTable = $('#invalidTable').DataTable({
+            order: [[0, "asc"]],
+            pageLength: 10,
+            lengthMenu: [[5, 10, 25, 50, -1], [5, 10, 25, 50, "All"]],
+            columnDefs: [
+                { orderable: false, targets: [5, 6] }
+            ]
+        });
+
+        $("#batchSelect").on("change", function () {
+            const batch = $(this).val();
+
+            if (!batch) {
+                hideTable();
+                return;
+            }
+
+            fetch(`/api/invalid-report/${batch}/`, {
+                credentials: "same-origin"
+            })
+                .then(res => res.json())
+                .then(resp => {
+                    if (!resp.success || !resp.rows.length) {
+                        hideTable();
+                        return;
+                    }
+                    populateTable(resp.rows);
+                })
+                .catch(() => hideTable());
+        });
+    });
+
+    function loadBatches() {
+        fetch("/api/invalid-report/batches/", {
+            credentials: "same-origin"
+        })
+            .then(res => res.json())
+            .then(resp => {
+                if (!resp.success) return;
+
+                const select = $("#batchSelect");
+                select.empty().append(`<option></option>`);
+
+                resp.batches.forEach(b => {
+                    select.append(new Option(`${b.file_name}`, b.batch_id));
+                });
+
+                select.trigger("change.select2");
+            });
+    }
+
+    function populateTable(rows) {
+
+        $("#tableContainer").removeClass("d-none");
+        $("#exportActions").show();
+
+        invalidTable.clear();
+
+        rows.forEach((r, index) => {
+            invalidTable.row.add([
+                index + 1,
+                r.batch_id,
+                r.file_name,
+                r.uploaded_by,
+                r.uploaded_at,
+                `<span class="badge badge-danger text-white">${r.status}</span>`,
+                r.file_url,
+            ]);
+        });
+
+        invalidTable.draw();
+    }
+
+    function hideTable() {
+        $("#tableContainer").addClass("d-none");
+        $("#exportActions").addClass("d-none");
+        invalidTable.clear().draw();
+    }
+
+    function exportCSV() {
+        let csv = [];
+        let headers = [];
+
+        $("#invalidTable thead th").each(function () {
+            headers.push(`"${$(this).text()}"`);
+        });
+        csv.push(headers.join(","));
+
+        invalidTable.rows({ search: "applied" }).every(function () {
+            const row = this.data().map(v => `"${String(v).replace(/"/g, '""')}"`);
+            csv.push(row.join(","));
+        });
+
+        downloadFile(csv.join("\n"), "invalid_invoice_report.csv", "text/csv");
+    }
+
+    function exportExcel() {
+        let html = "<table><thead><tr>";
+
+        $("#invalidTable thead th").each(function () {
+            html += `<th>${$(this).text()}</th>`;
+        });
+
+        html += "</tr></thead><tbody>";
+
+        invalidTable.rows({ search: "applied" }).every(function () {
+            html += "<tr>";
+            this.data().forEach(col => {
+                html += `<td>${col}</td>`;
+            });
+            html += "</tr>";
+        });
+
+        html += "</tbody></table>";
+
+        const blob = new Blob([html], {
+            type: "application/vnd.ms-excel"
+        });
+
+        downloadBlob(blob, "invalid_invoice_report.xls");
+    }
+
+    function exportJSON() {
+        const data = [];
+
+        invalidTable.rows({ search: "applied" }).every(function () {
+            const r = this.data();
+            data.push({
+                "S.No": r[0],
+                "Batch ID": r[1],
+                "File Name": r[2],
+                "Uploaded By": r[3],
+                "Uploaded At": r[4],
+                "Invalid URL": r[5],
+                "Status": r[6]
+            });
+        });
+
+        downloadFile(
+            JSON.stringify(data, null, 2),
+            "invalid_invoice_report.json",
+            "application/json"
+        );
+    }
+
+    function downloadFile(content, filename, mime) {
+        const blob = new Blob([content], { type: mime });
+        downloadBlob(blob, filename);
+    }
+
+    function downloadBlob(blob, filename) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+</script>
+{% endblock javascripts %}

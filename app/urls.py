@@ -50,6 +50,12 @@ urlpatterns = [
     
     path("reports/success/", success_report, name="report_success"),
     path("reports/duplicate/", duplicate_report, name="report_duplicate"),
-    path("reports/invalid/", invalid_report, name="report_invalid"),
+     path("report_invalid/", report_invalid, name="report_invalid"),
+    path("api/invalid-report/batches/", get_all_batches, name="invalid_batches"),
+    path(
+        "api/invalid-report/<str:batch_id>/",
+        get_invalid_by_batch,
+        name="invalid_by_batch"
+    ),
     
 ]

@@ -990,20 +990,31 @@ def success_report(request):
                 "success": True,
                 "source_files": list(source_files)
             })
+
         invoices = (
             InvoiceExtraction.objects
             .filter(
                 status="SUCCESS",
                 source_file_name=source_file_name
             )
+            .select_related("batch")
             .order_by("-created_at")
-            .values("id", "extracted_data")
+            .values(
+                "id",
+                "status",
+                "source_file_name",
+                "created_at",
+                "extracted_data",
+                "batch__batch_id",
+                "created_by__username",
+            )
         )
 
         return JsonResponse({
             "success": True,
             "data": list(invoices)
         })
+
     return render(request, "pages/reports/success_report.html")
 
 @login_required(login_url="/")
@@ -1013,7 +1024,47 @@ def duplicate_report(request):
     return render(request, "pages/reports/duplicate_report.html", {"extracted_invoices": extracted_invoices})
 
 @login_required(login_url="/")
-def invalid_report(request):
-    extracted_invoices = InvoiceExtraction.objects.filter(status="INVALID").order_by("-created_at")
+def report_invalid(request):
+    """Render Invalid Report UI"""
+    return render(request, "pages/reports/invalid_report.html")
 
-    return render(request, "pages/reports/invalid_report.html", {"extracted_invoices": extracted_invoices})
+@login_required
+def get_all_batches(request):
+    batches = (
+        UploadManagement.objects
+        .filter(link_status="INVALID")
+        .values("batch_id")
+        .annotate(file_name=Max("file_name"))  
+        .order_by("-batch_id")
+    )
+
+    return JsonResponse({
+        "success": True,
+        "batches": list(batches)
+    })
+
+
+@login_required
+def get_invalid_by_batch(request, batch_id):
+    records = (
+        UploadManagement.objects
+        .filter(batch_id=batch_id, link_status="INVALID")
+        .select_related("created_by")
+        .order_by("-created_at")
+    )
+
+    rows = []
+    for r in records:
+        rows.append({
+            "batch_id": r.batch_id,
+            "file_name": r.file_name,
+            "uploaded_at": r.created_at.strftime("%Y-%m-%d %H:%M"),
+            "uploaded_by": r.created_by.username if r.created_by else "-",
+            "file_url": r.file_url,
+            "status": r.link_status,
+        })
+
+    return JsonResponse({
+        "success": True,
+        "rows": rows
+    })
