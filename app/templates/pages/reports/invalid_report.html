@@ -111,7 +111,7 @@
                 return;
             }
 
-            fetch(`/report_invalid/?batch_id=${encodeURIComponent(batch)}`, {
+            fetch(`/reports/invalid/?batch_id=${encodeURIComponent(batch)}`, {
                 headers: { "X-Requested-With": "XMLHttpRequest" }
             })
                 .then(res => res.json())
@@ -127,7 +127,7 @@
     });
 
     function loadBatches() {
-        fetch("/report_invalid/", {
+        fetch("/reports/invalid/", {
             headers: { "X-Requested-With": "XMLHttpRequest" }
         })
             .then(res => res.json())

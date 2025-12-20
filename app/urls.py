@@ -50,6 +50,6 @@ urlpatterns = [
     
     path("reports/success/", success_report, name="report_success"),
     path("reports/duplicate/", duplicate_report, name="report_duplicate"),
-    path("report_invalid/", report_invalid, name="report_invalid"),
+    path("reports/invalid/", report_invalid, name="report_invalid"),
     
 ]
