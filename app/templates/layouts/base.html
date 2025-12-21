@@ -34,7 +34,7 @@
     <!-- Icons from Bootstrap -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
-    
+
     <!-- SweetAlert2 CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
@@ -58,7 +58,7 @@
             </div>
             <div class="spinner-grow text-primary" role="status">
                 <span class="sr-only">Loading...</span>
-            </div>            
+            </div>
         </div>
     </div>
     <!-- <div class="loader" id="loader" style="background-color: aliceblue;">
@@ -88,7 +88,7 @@
 <script src="{% static 'vendors/datatables.net/jquery.dataTables.js' %}"></script>
 <script src="{% static 'vendors/datatables.net-bs4/dataTables.bootstrap4.js' %}"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script>    
+<script>
     $('#content').hide();
     $('#loader').show();
     $(window).on('load', function () {
@@ -108,7 +108,7 @@
         toastr.options.timeOut = 2000;
         toastr.options.positionClass = 'toast-top-right';
         if (toastr[alert_type]) {
-            toastr[alert_type](alert_message,alert_title);
+            toastr[alert_type](alert_message, alert_title);
         }
         else {
             console.error('Invalid alert type:', alert_type);
