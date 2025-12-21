@@ -93,26 +93,37 @@
             </a>
 
             <div class="collapse {% if current|startswith:'report_' %}show{% endif %}" id="reportsMenu">
-                <ul class="nav flex-column sub-menu">
+                <ul class="nav flex-column sub-menu" style="list-style: none !important; padding-left: 0 !important;">
+
+                    <li class="nav-item" style="list-style: none !important;">
+                        <a class="nav-link {% if current == 'report_success' %}active{% endif %}"
+                            href="{% url 'report_success' %}"
+                            style="text-align: center; {% if current == 'report_success' %}background-color: rgba(167, 139, 250, 0.3); border-radius: 6px; font-weight: 500;{% endif %}">
+                            <i class="bi bi-check-circle-fill menu-icon"></i> Success Report
+                        </a>
+                    </li>
 
                     <li class="nav-item">
-                        <a class="nav-link {% if current == 'report_success' %}active{% endif %}"
-                            href="{% url 'report_success' %}">
-                            Success Report
+                        <a class="nav-link {% if current == 'report_failed' %}active{% endif %}"
+                            href="{% url 'report_failed' %}"
+                            style="text-align: center; {% if current == 'report_failed' %}background-color: rgba(167, 139, 250, 0.3); border-radius: 6px; font-weight: 500;{% endif %}">
+                            <i class="bi bi-x-circle-fill menu-icon"></i> Failed Report
                         </a>
                     </li>
 
                     <li class="nav-item">
                         <a class="nav-link {% if current == 'report_duplicate' %}active{% endif %}"
-                            href="{% url 'report_duplicate' %}">
-                            Duplicate Report
+                            href="{% url 'report_duplicate' %}"
+                            style="text-align: center; {% if current == 'report_duplicate' %}background-color: rgba(167, 139, 250, 0.3); border-radius: 6px; font-weight: 500;{% endif %}">
+                            <i class="bi bi-file-earmark-fill menu-icon"></i> Duplicate Report
                         </a>
                     </li>
 
                     <li class="nav-item">
                         <a class="nav-link {% if current == 'report_invalid' %}active{% endif %}"
-                            href="{% url 'report_invalid' %}">
-                            Invalid Report
+                            href="{% url 'report_invalid' %}"
+                            style="text-align: center; {% if current == 'report_invalid' %}background-color: rgba(167, 139, 250, 0.3); border-radius: 6px; font-weight: 500;{% endif %}">
+                            <i class="bi bi-exclamation-triangle-fill menu-icon"></i> Invalid Report
                         </a>
                     </li>
 

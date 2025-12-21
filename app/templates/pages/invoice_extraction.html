@@ -192,6 +192,9 @@
                             console.log('Reloading table after modal close...');
                             table.ajax.reload(null, false);
                         }
+
+                        // Reset file dropdown to allow new selection
+                        $('#fileSelect').val(null).trigger('change');
                     });
                 }
             } catch (err) {

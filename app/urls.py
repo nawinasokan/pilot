@@ -48,6 +48,7 @@ urlpatterns = [
 
     # ---------- REPORTS ----------
     path("reports/success/", success_report, name="report_success"),
+    path("reports/failed/", failed_report, name="report_failed"),
     path("reports/duplicate/", duplicate_report, name="report_duplicate"),
     path("reports/invalid/", report_invalid, name="report_invalid"),
 ]

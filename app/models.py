@@ -96,10 +96,7 @@ class UserMenuPermission(AuditModel):
     def __str__(self):
         return f"{self.user.username} -> {self.menu.name}"
 
-
-
 # ----------------Custom Extraction Fields---------------
-
 class CustomExtractionField(AuditModel):
     FIELD_TYPES = [
         ('string', 'Text'),

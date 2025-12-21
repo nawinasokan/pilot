@@ -805,7 +805,7 @@ def success_report(request):
                 status="SUCCESS",
                 source_file_name=source_file_name
             )
-            .select_related("batch")
+            .select_related("batch_master", "created_by")
             .order_by("-created_at")
             .values(
                 "id",
@@ -813,10 +813,11 @@ def success_report(request):
                 "source_file_name",
                 "created_at",
                 "extracted_data",
-                "batch__batch_id",
+                "batch_master__extraction_batch_id",
                 "created_by__username",
             )
         )
+
 
         return JsonResponse({
             "success": True,
@@ -826,10 +827,177 @@ def success_report(request):
     return render(request, "pages/reports/success_report.html")
 
 @login_required(login_url="/")
-def duplicate_report(request):
-    extracted_invoices = InvoiceExtraction.objects.filter(status="DUPLICATE").order_by("-created_at")
+def failed_report(request):
+    is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
+    source_file_name = request.GET.get("source_file_name")
 
-    return render(request, "pages/reports/duplicate_report.html", {"extracted_invoices": extracted_invoices})
+    if is_ajax:
+        if not source_file_name:
+            source_files = (
+                InvoiceExtraction.objects
+                .filter(status="FAILED")
+                .exclude(source_file_name__isnull=True)
+                .exclude(source_file_name="")
+                .values("source_file_name")
+                .distinct()
+                .order_by("-source_file_name")
+            )
+
+            return JsonResponse({
+                "success": True,
+                "source_files": list(source_files)
+            })
+
+        invoices = (
+            InvoiceExtraction.objects
+            .filter(
+                status="FAILED",
+                source_file_name=source_file_name
+            )
+            .select_related("batch_master", "created_by")
+            .order_by("-created_at")
+            .values(
+                "id",
+                "status",
+                "source_file_name",
+                "source_file_url",
+                "created_at",
+                "extracted_data",
+                "batch_master__extraction_batch_id",
+                "created_by__username",
+            )
+        )
+
+        return JsonResponse({
+            "success": True,
+            "data": list(invoices)
+        })
+
+    return render(request, "pages/reports/failed_report.html")
+
+@login_required(login_url="/")
+def duplicate_report(request):
+    is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
+    source_file_name = request.GET.get("source_file_name")
+    duplicate_type = request.GET.get("duplicate_type", "both")
+
+    if is_ajax:
+        # Return source files list (from both tables)
+        if not source_file_name:
+            # Get files with link duplicates
+            link_files = (
+                UploadManagement.objects
+                .filter(link_status="DUPLICATE")
+                .exclude(file_name__isnull=True)
+                .exclude(file_name="")
+                .values("file_name")
+                .distinct()
+            )
+            
+            # Get files with invoice duplicates
+            invoice_files = (
+                InvoiceExtraction.objects
+                .filter(status="DUPLICATE")
+                .exclude(source_file_name__isnull=True)
+                .exclude(source_file_name="")
+                .values("source_file_name")
+                .distinct()
+            )
+
+            # Combine and deduplicate
+            all_files = set()
+            for f in link_files:
+                all_files.add(f['file_name'])
+            for f in invoice_files:
+                all_files.add(f['source_file_name'])
+
+            source_files = [{"source_file_name": name} for name in sorted(all_files)]
+
+            return JsonResponse({
+                "success": True,
+                "source_files": source_files
+            })
+
+        # Fetch duplicates based on type
+        data = []
+
+        if duplicate_type in ["link", "both"]:
+            # Get link duplicates
+            link_duplicates = (
+                UploadManagement.objects
+                .filter(
+                    link_status="DUPLICATE",
+                    file_name=source_file_name
+                )
+                .select_related("created_by")
+                .order_by("-created_at")
+                .values(
+                    "id",
+                    "batch_id",
+                    "file_name",
+                    "file_url",
+                    "created_at",
+                    "created_by__username",
+                    "link_status"
+                )
+            )
+            
+            for ld in link_duplicates:
+                data.append({
+                    "id": ld["id"],
+                    "type": "LINK",
+                    "batch_id": ld["batch_id"],
+                    "file_name": ld["file_name"],
+                    "file_url": ld["file_url"],
+                    "created_at": ld["created_at"].isoformat() if ld["created_at"] else None,
+                    "created_by": ld["created_by__username"],
+                    "status": ld["link_status"]
+                })
+
+        if duplicate_type in ["invoice", "both"]:
+            # Get invoice duplicates
+            invoice_duplicates = (
+                InvoiceExtraction.objects
+                .filter(
+                    status="DUPLICATE",
+                    source_file_name=source_file_name
+                )
+                .select_related("batch_master", "created_by")
+                .order_by("-created_at")
+                .values(
+                    "id",
+                    "status",
+                    "source_file_name",
+                    "source_file_url",
+                    "created_at",
+                    "extracted_data",
+                    "batch_master__extraction_batch_id",
+                    "created_by__username",
+                    "duplicate_fingerprint"
+                )
+            )
+
+            for inv in invoice_duplicates:
+                data.append({
+                    "id": inv["id"],
+                    "type": "INVOICE",
+                    "batch_id": inv["batch_master__extraction_batch_id"],
+                    "file_name": inv["source_file_name"],
+                    "file_url": inv["source_file_url"],
+                    "created_at": inv["created_at"].isoformat() if inv["created_at"] else None,
+                    "created_by": inv["created_by__username"],
+                    "status": inv["status"],
+                    "extracted_data": inv["extracted_data"],
+                    "duplicate_fingerprint": inv["duplicate_fingerprint"]
+                })
+
+        return JsonResponse({
+            "success": True,
+            "data": data,
+            "duplicate_type": duplicate_type
+        })
+
+    return render(request, "pages/reports/duplicate_report.html")
 
 @login_required(login_url="/")
 def report_invalid(request):

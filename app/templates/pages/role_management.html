@@ -127,37 +127,37 @@
 {% block javascripts %}
 <script>
     {% if messages %}
-        {% for message in messages %}
-            var msgType = "{{ message.tags }}";  
-              var msgContent = "{{ message|escapejs }}"; 
-            var iconType = 'info'; 
+    {% for message in messages %}
+    var msgType = "{{ message.tags }}";
+    var msgContent = "{{ message|escapejs }}";
+    var iconType = 'info';
 
-            if (msgType === 'error') {
-                iconType = 'error';
-            } else if (msgType === 'success') {
-                iconType = 'success';
-            } else if (msgType === 'warning') {
-                iconType = 'warning';
-            }
+    if (msgType === 'error') {
+        iconType = 'error';
+    } else if (msgType === 'success') {
+        iconType = 'success';
+    } else if (msgType === 'warning') {
+        iconType = 'warning';
+    }
 
-            Swal.fire({
-                icon: iconType,
-                title: iconType.charAt(0).toUpperCase() + iconType.slice(1), 
-                text: msgContent,
-                confirmButtonColor: '#4B49AC', 
-                confirmButtonText: 'OK'
-            });
-        {% endfor %}
+    Swal.fire({
+        icon: iconType,
+        title: iconType.charAt(0).toUpperCase() + iconType.slice(1),
+        text: msgContent,
+        confirmButtonColor: '#4B49AC',
+        confirmButtonText: 'OK'
+    });
+    {% endfor %}
     {% endif %}
 
 
     $(document).ready(function () {
         $('#roleTable').DataTable({
-            "order": [[0, "asc"]], 
+            "order": [[0, "asc"]],
             "pageLength": 10,
             "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "All"]],
             "columnDefs": [
-                { "orderable": false, "targets": 4 } 
+                { "orderable": false, "targets": 4 }
             ]
         });
 
@@ -172,10 +172,10 @@
     }
 
     $(document).on('click', '.delete-confirm', function (e) {
-        e.preventDefault(); 
+        e.preventDefault();
 
-        var deleteUrl = $(this).attr('href'); 
-        
+        var deleteUrl = $(this).attr('href');
+
         Swal.fire({
             title: 'Are you sure?',
             text: "You won't be able to revert this! Users assigned this role might be affected.",

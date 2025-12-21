@@ -1,22 +1,438 @@
 {% extends "layouts/base.html" %}
 
-{% block title %} Duplicate Report {% endblock %}
+{% block title %}Duplicate Invoice Report{% endblock %}
 
-<!-- Specific CSS goes HERE -->
-{% block stylesheets %}{% endblock stylesheets %}
+{% block stylesheets %}
+<style>
+    .select2-container {
+        width: 100% !important;
+    }
+
+    .select2-container--default .select2-selection--single {
+        height: 42px;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        padding-left: 14px;
+        color: #495057;
+        font-size: 14px;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 42px;
+    }
+</style>
+{% endblock stylesheets %}
+
 {% block content %}
-<div class="grid-margin-sm-0">
-    <div class="row">
-        <div class="col-12 col-xl-12 stretch-card">
-            <div class="card">
-                <div class="card-header">
-                    <h4 class="card-title">Duplicate Report</h4>
-                </div>
-                <div class="card-body">
-                    <p>Welcome to the Duplicate Report!</p>
+<div class="row">
+    <div class="col-12 grid-margin stretch-card">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h4 class="mb-0">Duplicate Invoice Report</h4>
+                    </div>
+                    <div class="col-md-3">
+                        <select id="fileSelect" class="form-control">
+                            <option value="">Select Source File</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select id="duplicateTypeSelect" class="form-control" disabled>
+                            <option value="">Select Duplicate Type</option>
+                            <option value="both">All Duplicates</option>
+                            <option value="link">Link Duplicates</option>
+                            <option value="invoice">Invoice Duplicates</option>
+                        </select>
+                    </div>
                 </div>
             </div>
+
+            <div class="card-body">
+                <div class="d-flex justify-content-end mb-3 d-none" id="exportActions"
+                    style="display: none !important;">
+                    <button class="btn btn-primary mr-2" onclick="exportExcel()">Excel</button>
+                    <button class="btn btn-primary mr-2" onclick="exportCSV()">CSV</button>
+                    <button class="btn btn-primary" onclick="exportJSON()">JSON</button>
+                </div>
+
+                <div class="table-responsive d-none" id="tableContainer">
+                    <table id="duplicateTable" class="table table-hover table-striped">
+                        <thead>
+                            <tr id="tableHead"></tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+
+            </div>
+
         </div>
     </div>
 </div>
 {% endblock content %}
+
+{% block javascripts %}
+<script>
+    let duplicateTable = null;
+    let currentKeys = [];
+    let currentSourceFile = "";
+    let currentDuplicateType = "";
+
+    const FIXED_COLUMNS = [
+        { key: "batch_master__extraction_batch_id", label: "Batch ID" },
+        { key: "created_by__username", label: "Uploaded By" },
+        { key: "source_file_name", label: "Uploaded File" },
+        { key: "created_at", label: "Uploaded At" },
+        { key: "status", label: "Status" },
+        { key: "duplicate_fingerprint", label: "Duplicate ID" }
+    ];
+
+    function escapeHtml(val) {
+        if (val === null || val === undefined) return "-";
+        return String(val)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function renderStatusBadge(status) {
+        return `<span class="badge badge-warning text-white">${status}</span>`;
+    }
+
+    $(document).ready(function () {
+
+        $("#fileSelect").select2({
+            placeholder: "Search source file...",
+            allowClear: true,
+            width: "100%"
+        });
+
+        $("#duplicateTypeSelect").select2({
+            placeholder: "Select duplicate type...",
+            allowClear: true,
+            width: "100%"
+        });
+
+        loadSourceFiles();
+
+        // File selection handler
+        $("#fileSelect").on("change", function () {
+            const fileName = $(this).val();
+            currentSourceFile = fileName || "";
+
+            if (!fileName) {
+                $("#duplicateTypeSelect").prop("disabled", true).val("").trigger("change");
+                hideTable();
+                return;
+            }
+
+            // Enable duplicate type dropdown
+            $("#duplicateTypeSelect").prop("disabled", false);
+
+            // Auto-select "All Duplicates" and load data
+            $("#duplicateTypeSelect").val("both").trigger("change");
+        });
+
+        // Duplicate type selection handler
+        $("#duplicateTypeSelect").on("change", function () {
+            const duplicateType = $(this).val();
+            currentDuplicateType = duplicateType || "both";
+
+            if (!currentSourceFile) {
+                return;
+            }
+
+            if (!duplicateType) {
+                hideTable();
+                return;
+            }
+
+            loadDuplicates();
+        });
+    });
+
+    function loadSourceFiles() {
+        fetch("/reports/duplicate/", {
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+        })
+            .then(res => res.json())
+            .then(resp => {
+                if (!resp.success) return;
+
+                const select = $("#fileSelect");
+                select.empty().append(`<option></option>`);
+
+                resp.source_files.forEach(f => {
+                    select.append(new Option(f.source_file_name, f.source_file_name));
+                });
+
+                select.trigger("change.select2");
+            });
+    }
+
+    function loadDuplicates() {
+        const url = `/reports/duplicate/?source_file_name=${encodeURIComponent(currentSourceFile)}&duplicate_type=${currentDuplicateType}`;
+
+        fetch(url, {
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+        })
+            .then(res => res.json())
+            .then(resp => {
+                if (!resp.success || !resp.data.length) {
+                    hideTable();
+                    return;
+                }
+                populateTable(resp.data);
+            })
+            .catch(() => hideTable());
+    }
+
+    function formatDateOnly(dateStr) {
+        if (!dateStr) return "-";
+
+        const d = new Date(dateStr);
+        return d.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric"
+        });
+    }
+
+    function populateTable(rows) {
+
+        $("#tableContainer").removeClass("d-none");
+        $("#exportActions").removeClass("d-none").show();
+
+        if ($.fn.DataTable.isDataTable("#duplicateTable")) {
+            $("#duplicateTable").DataTable().clear().destroy();
+        }
+
+        $("#tableHead").empty();
+        $("#tableBody").empty();
+
+        // Determine columns based on data type
+        const hasInvoiceData = rows.some(r => r.type === "INVOICE" && r.extracted_data);
+
+        let columns = [
+            { key: "batch_id", label: "Batch ID" },
+            { key: "file_name", label: "Uploaded File" },
+            { key: "created_by", label: "Uploaded By" },
+            { key: "created_at", label: "Uploaded At" },
+            { key: "type", label: "Duplicate Type" },
+            { key: "file_url", label: "View File" },
+            { key: "status", label: "Status" }
+        ];
+
+        // Add invoice-specific columns if we have invoice duplicates
+        if (hasInvoiceData) {
+            currentKeys = [];
+            rows.forEach(r => {
+                if (r.extracted_data) {
+                    Object.keys(r.extracted_data).forEach(k => {
+                        if (!currentKeys.includes(k)) {
+                            currentKeys.push(k);
+                        }
+                    });
+                }
+            });
+        } else {
+            currentKeys = [];
+        }
+
+        $("#tableHead").append("<th>S.No</th>");
+        columns.forEach(col => {
+            $("#tableHead").append(`<th>${col.label}</th>`);
+        });
+
+        if (hasInvoiceData) {
+            currentKeys.forEach(k => {
+                $("#tableHead").append(`<th>${escapeHtml(k)}</th>`);
+            });
+        }
+
+        rows.forEach(() => {
+            let tr = "<tr><td></td>";
+            columns.forEach(() => tr += "<td></td>");
+            if (hasInvoiceData) {
+                currentKeys.forEach(() => tr += "<td></td>");
+            }
+            tr += "</tr>";
+            $("#tableBody").append(tr);
+        });
+
+        duplicateTable = $("#duplicateTable").DataTable({
+            pageLength: 10,
+            ordering: true,
+            searching: true,
+            responsive: true,
+            columnDefs: [{ targets: 0, orderable: false }],
+            language: {
+                emptyTable: "No DUPLICATE records found"
+            }
+        });
+
+        duplicateTable.rows().every(function (idx) {
+            const r = rows[idx];
+
+            const rowData = [
+                idx + 1,
+
+                escapeHtml(r.batch_id || "-"),
+                escapeHtml(r.file_name || "-"),
+                escapeHtml(r.created_by || "-"),
+                formatDateOnly(r.created_at),
+                `<span class="badge ${r.type === 'LINK' ? 'badge-info' : 'badge-primary'}">${r.type}</span>`,
+                `<a href="${escapeHtml(r.file_url)}" target="_blank" class="badge badge-outline-primary">View</a>`,
+
+                `<span class="badge badge-warning text-white">${r.status}</span>`
+            ];
+
+            // Add invoice data if present
+            if (hasInvoiceData) {
+                const extractedData = currentKeys.map(k => {
+                    return r.extracted_data ? escapeHtml(r.extracted_data[k] ?? "-") : "-";
+                });
+                rowData.push(...extractedData);
+            }
+
+            this.data(rowData);
+        });
+
+        duplicateTable.draw();
+    }
+
+    function hideTable() {
+        $("#tableContainer").addClass("d-none");
+        $("#exportActions").addClass("d-none").hide();
+
+        if ($.fn.DataTable.isDataTable("#duplicateTable")) {
+            $("#duplicateTable").DataTable().clear().destroy();
+        }
+
+        $("#tableHead").empty();
+        $("#tableBody").empty();
+    }
+
+    // Export functions
+    function exportExcel() {
+        if (!duplicateTable) {
+            alert("No data to export");
+            return;
+        }
+
+        let html = "<table><thead><tr>";
+
+        // Get headers
+        $("#duplicateTable thead th").each(function () {
+            html += `<th>${$(this).text()}</th>`;
+        });
+
+        html += "</tr></thead><tbody>";
+
+        // Get data rows
+        duplicateTable.rows({ search: "applied" }).every(function () {
+            html += "<tr>";
+            this.data().forEach(col => {
+                // Remove HTML tags for Excel
+                const cleanCol = $('<div>').html(col).text();
+                html += `<td>${cleanCol}</td>`;
+            });
+            html += "</tr>";
+        });
+
+        html += "</tbody></table>";
+
+        const blob = new Blob([html], {
+            type: "application/vnd.ms-excel"
+        });
+
+        downloadBlob(blob, `duplicate_report_${currentSourceFile}_${new Date().toISOString().split('T')[0]}.xls`);
+    }
+
+    function exportCSV() {
+        if (!duplicateTable) {
+            alert("No data to export");
+            return;
+        }
+
+        let csv = [];
+        let headers = [];
+
+        // Get headers
+        $("#duplicateTable thead th").each(function () {
+            headers.push(`"${$(this).text()}"`);
+        });
+        csv.push(headers.join(","));
+
+        // Get data rows
+        duplicateTable.rows({ search: "applied" }).every(function () {
+            const row = this.data().map(v => {
+                // Remove HTML tags and escape quotes
+                const cleanVal = $('<div>').html(v).text();
+                return `"${String(cleanVal).replace(/"/g, '""')}"`;
+            });
+            csv.push(row.join(","));
+        });
+
+        downloadFile(
+            csv.join("\n"),
+            `duplicate_report_${currentSourceFile}_${new Date().toISOString().split('T')[0]}.csv`,
+            "text/csv"
+        );
+    }
+
+    function exportJSON() {
+        if (!duplicateTable) {
+            alert("No data to export");
+            return;
+        }
+
+        const data = [];
+        const headers = [];
+
+        // Get headers
+        $("#duplicateTable thead th").each(function () {
+            headers.push($(this).text());
+        });
+
+        // Get data rows
+        duplicateTable.rows({ search: "applied" }).every(function () {
+            const rowData = {};
+            this.data().forEach((val, idx) => {
+                // Remove HTML tags
+                const cleanVal = $('<div>').html(val).text();
+                rowData[headers[idx]] = cleanVal;
+            });
+            data.push(rowData);
+        });
+
+        downloadFile(
+            JSON.stringify(data, null, 2),
+            `duplicate_report_${currentSourceFile}_${new Date().toISOString().split('T')[0]}.json`,
+            "application/json"
+        );
+    }
+
+    function downloadFile(content, filename, mime) {
+        const blob = new Blob([content], { type: mime });
+        downloadBlob(blob, filename);
+    }
+
+    function downloadBlob(blob, filename) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+</script>
+
+{% endblock javascripts %}

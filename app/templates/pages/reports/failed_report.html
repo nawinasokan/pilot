@@ -1,6 +1,6 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}Success Invoice Report{% endblock %}
+{% block title %}Failed Invoice Report{% endblock %}
 
 {% block stylesheets %}
 
@@ -36,7 +36,7 @@
             <div class="card-header">
                 <div class="row align-items-center">
                     <div class="col-md-8">
-                        <h4 class="mb-0">Success Invoice Report</h4>
+                        <h4 class="mb-0">Failed Invoice Report</h4>
                     </div>
                     <div class="col-md-4 text-end">
                         <select id="fileSelect" class="form-control">
@@ -55,7 +55,7 @@
                 </div>
 
                 <div class="table-responsive d-none" id="tableContainer">
-                    <table id="successTable" class="table table-hover table-striped">
+                    <table id="failedTable" class="table table-hover table-striped">
                         <thead>
                             <tr id="tableHead"></tr>
                         </thead>
@@ -72,7 +72,7 @@
 
 {% block javascripts %}
 <script>
-    let successTable = null;
+    let failedTable = null;
     let currentKeys = [];
     let currentSourceFile = "";
 
@@ -81,8 +81,11 @@
         { key: "source_file_name", label: "Uploaded File" },
         { key: "created_by__username", label: "Uploaded By" },
         { key: "created_at", label: "Uploaded At" },
-        { key: "status", label: "Status" }
+        { key: "status", label: "Status" },
+        { key: "source_file_url", label: "View File" },
+        { key: "error_reason", label: "Failure Reason" }
     ];
+
 
     function escapeHtml(val) {
         if (val === null || val === undefined) return "-";
@@ -95,7 +98,7 @@
     }
 
     function renderStatusBadge(status) {
-        return `<span class="badge badge-success text-white">${status}</span>`;
+        return `<span class="badge badge-danger text-white">${status}</span>`;
     }
 
     $(document).ready(function () {
@@ -117,7 +120,7 @@
                 return;
             }
 
-            fetch(`/reports/success/?source_file_name=${encodeURIComponent(fileName)}`, {
+            fetch(`/reports/failed/?source_file_name=${encodeURIComponent(fileName)}`, {
                 headers: { "X-Requested-With": "XMLHttpRequest" }
             })
                 .then(res => res.json())
@@ -133,7 +136,7 @@
     });
 
     function loadSourceFiles() {
-        fetch("/reports/success/", {
+        fetch("/reports/failed/", {
             headers: { "X-Requested-With": "XMLHttpRequest" }
         })
             .then(res => res.json())
@@ -168,14 +171,15 @@
         $("#tableContainer").removeClass("d-none");
         $("#exportActions").show();
 
-        if ($.fn.DataTable.isDataTable("#successTable")) {
-            $("#successTable").DataTable().clear().destroy();
+        if ($.fn.DataTable.isDataTable("#failedTable")) {
+            $("#failedTable").DataTable().clear().destroy();
         }
 
         $("#tableHead").empty();
         $("#tableBody").empty();
 
-        currentKeys = Object.keys(rows[0].extracted_data || {});
+        // Get error reason from extracted_data
+        currentKeys = [];
 
         $("#tableHead").append("<th>S.No</th>");
 
@@ -183,30 +187,25 @@
             $("#tableHead").append(`<th>${col.label}</th>`);
         });
 
-        currentKeys.forEach(k => {
-            $("#tableHead").append(`<th>${escapeHtml(k)}</th>`);
-        });
-
         rows.forEach(() => {
             let tr = "<tr><td></td>";
             FIXED_COLUMNS.forEach(() => tr += "<td></td>");
-            currentKeys.forEach(() => tr += "<td></td>");
             tr += "</tr>";
             $("#tableBody").append(tr);
         });
 
-        successTable = $("#successTable").DataTable({
+        failedTable = $("#failedTable").DataTable({
             pageLength: 10,
             ordering: true,
             searching: true,
             responsive: true,
             columnDefs: [{ targets: 0, orderable: false }],
             language: {
-                emptyTable: "No SUCCESS invoices found"
+                emptyTable: "No FAILED invoices found"
             }
         });
 
-        successTable.rows().every(function (idx) {
+        failedTable.rows().every(function (idx) {
             const r = rows[idx];
 
             const fixedData = FIXED_COLUMNS.map(col => {
@@ -217,29 +216,37 @@
                 if (col.key === "status") {
                     return renderStatusBadge(r.status);
                 }
+
+                if (col.key === "source_file_url") {
+                    if (r.source_file_url) {
+                        return `<a href="${escapeHtml(r.source_file_url)}" target="_blank" class="badge badge-outline-primary">View File</a>`;
+                    }
+                    return "-";
+                }
+
+                if (col.key === "error_reason") {
+                    const error = r.extracted_data?.error || "-";
+                    return `<span class="text-danger">${escapeHtml(error)}</span>`;
+                }
+
                 return escapeHtml(r[col.key] ?? "-");
             });
 
-            const extractedData = currentKeys.map(
-                k => escapeHtml(r.extracted_data?.[k] ?? "-")
-            );
-
             this.data([
                 idx + 1,
-                ...fixedData,
-                ...extractedData
+                ...fixedData
             ]);
         });
 
-        successTable.draw();
+        failedTable.draw();
     }
 
     function hideTable() {
         $("#tableContainer").addClass("d-none");
         $("#exportActions").addClass("d-none");
 
-        if ($.fn.DataTable.isDataTable("#successTable")) {
-            $("#successTable").DataTable().clear().destroy();
+        if ($.fn.DataTable.isDataTable("#failedTable")) {
+            $("#failedTable").DataTable().clear().destroy();
         }
 
         $("#tableHead").empty();
