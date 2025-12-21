@@ -23,13 +23,9 @@ from django.db.models import Count, Q, Max
 from google import genai
 from app.gemini.builder import build_invoice_prompt
 import logging
-from app.gemini.invoice_storage import store_invoice_extraction
 from app.gemini.url_filter import filter_valid_invoice_urls
-from app.gemini.url_filter import normalize_url
-from app.gemini.client import client, GEMINI_MODEL
-from django.db import connection
-from django.utils import timezone
 import threading
+
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +33,7 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
-
+ocr_semaphore = threading.Semaphore(value=2)
 
 #################### Login/Logout ######################
 def LoginView(request):
@@ -654,6 +650,9 @@ def upload_management_delete(request, batch_id):
 
 ################ Invoice  Extraction ######################
 
+# Import invoice processing logic from gemini module
+from app.gemini.invoice_processor import process_invoices_parallel
+
 @login_required(login_url="/")
 def invoice_extraction(request):
 
@@ -670,10 +669,6 @@ def invoice_extraction(request):
         .order_by("-last_updated")
     )
 
-    # print("\n========= INVOICE EXTRACTION PAGE =========")
-    # print(f"[TOTAL READY FILES] = {qs.count()}")
-    # print("==========================================\n")
-
     return render(
         request,
         "pages/invoice_extraction.html",
@@ -683,50 +678,55 @@ def invoice_extraction(request):
         }
     )
 
-def process_invoices_task(batch_master_id, urls, prompt, user_id):
-    try:
-        batch_master = ExtractionBatch.objects.get(id=batch_master_id)
-        for url in urls:
-            try:
-                response = client.models.generate_content(model=GEMINI_MODEL, contents=[prompt, url])
-                raw_text = (response.text or "").strip()
-                start, end = raw_text.find("{"), raw_text.rfind("}")
-                extracted_data = json.loads(raw_text[start:end + 1])
-
-                store_invoice_extraction(
-                    batch_master=batch_master, url=url, 
-                    extracted_data=extracted_data, user_id=user_id
-                )
-            except Exception:
-                batch_master.processed_count += 1
-                batch_master.save()
-    finally:
-        connection.close()
 
 @login_required(login_url="/")
 def start_invoice_extraction(request):
     payload = json.loads(request.body.decode("utf-8"))
-    b_id, f_name = payload.get("batch_id"), payload.get("file_name")
+    b_id = payload.get("batch_id")
+    f_name = payload.get("file_name")
 
-    if ExtractionBatch.objects.filter(extraction_batch_id=b_id, status='COMPLETED').exists():
-        return JsonResponse({"success": False, "message": "Batch already processed", "already_processed": True}, status=400)
+    if ExtractionBatch.objects.filter(
+        extraction_batch_id=b_id,
+        status="COMPLETED"
+    ).exists():
+        return JsonResponse(
+            {"success": False, "message": "Batch already processed", "already_processed": True},
+            status=400
+        )
 
-    raw_urls = list(UploadManagement.objects.filter(batch_id=b_id, link_status="VALID").values_list('file_url', flat=True))
+    raw_urls = list(
+        UploadManagement.objects
+        .filter(batch_id=b_id, link_status="VALID")
+        .values_list("file_url", flat=True)
+    )
+
     valid_urls, _ = filter_valid_invoice_urls(raw_urls, dedupe=True)
-    
+
     if not valid_urls:
-        return JsonResponse({"success": False, "message": "No valid URLs found"}, status=404)
+        return JsonResponse({"success": False, "message": "No valid URLs"}, status=404)
 
     master, _ = ExtractionBatch.objects.get_or_create(
         extraction_batch_id=b_id,
-        defaults={"upload_record": UploadManagement.objects.filter(batch_id=b_id).first(), "file_name": f_name}
+        defaults={
+            "upload_record": UploadManagement.objects.filter(batch_id=b_id).first(),
+            "file_name": f_name,
+        }
     )
-    master.total_count, master.processed_count, master.status = len(valid_urls), 0, 'PROCESSING'
+
+    master.total_count = len(valid_urls)
+    master.processed_count = 0
+    master.status = "PROCESSING"
     master.created_by = request.user
     master.save()
 
-    threading.Thread(target=process_invoices_task, args=(master.id, valid_urls, build_invoice_prompt(), request.user.id)).start()
+    threading.Thread(
+        target=process_invoices_parallel,
+        args=(master.id, valid_urls, request.user.id),
+        daemon=True  
+    ).start()
+
     return JsonResponse({"success": True, "extraction_batch_id": b_id})
+
 
 @login_required(login_url="/")
 def get_extraction_progress(request, extraction_batch_id):
@@ -755,47 +755,6 @@ def invoice_extraction_list(request):
             "created_at": batch.created_at.strftime("%Y-%m-%d %H:%M"), "created_by": batch.created_by.username
         })
     return JsonResponse({"success": True, "data": data})
-
-
-@login_required(login_url="/")
-def invoice_extraction_list(request):
-    qs = (
-        ExtractionBatch.objects
-        .filter(created_by=request.user)
-        .select_related("upload_record", "created_by")
-        .order_by("-created_at")
-    )
-
-    data = []
-    for index, batch in enumerate(qs, start=1):
-        stats = batch.invoices.aggregate(
-            success=Count('id', filter=Q(status='SUCCESS')),
-            duplicate=Count('id', filter=Q(status='DUPLICATE')),
-            failed=Count('id', filter=Q(status='FAILED')),
-            total=Count('id')
-        )
-
-        data.append({
-            "id": batch.id,
-            "sl_no": index,
-            "extraction_batch_id": batch.extraction_batch_id,
-            "source_file_name": batch.file_name,
-            "batch_status": batch.status, 
-            "batch_total_count": batch.total_count,
-            "batch_processed_count": batch.processed_count,
-            "success_count": stats['success'],
-            "duplicate_count": stats['duplicate'],
-            "failed_count": stats['failed'],
-            "total_processed": stats['total'],
-            "created_at": batch.created_at.strftime("%Y-%m-%d %H:%M"),
-            "created_by": batch.created_by.username if batch.created_by else "-",
-        })
-
-    return JsonResponse({
-        "success": True,
-        "data": data
-    })
-
 
 @login_required(login_url="/")
 @require_POST

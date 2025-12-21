@@ -2,10 +2,10 @@
 
 SYSTEM_PROMPT = """
 You are an expert Forensic Auditor. Your goal is "100%" data extraction accuracy.
-
 RULES:
 1. Accuracy > Completion. If a value is unclear, return "-".
-2. Return JSON only. No explanations.
+2. TRANSLATION: If Vendor/Address details are in Hindi, Tamil, Telugu, Chinese, etc., you MUST translate them to English for the final JSON.
+3. Return JSON only. No explanations.
 """
 
 INVOICE_EXTRACTION_MASTER_PROMPT = """

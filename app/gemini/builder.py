@@ -2,7 +2,6 @@
 from app.models import CustomExtractionField
 from app.gemini.prompts import SYSTEM_PROMPT, INVOICE_EXTRACTION_MASTER_PROMPT
 
-
 DEFAULT_VALUE = {
     "string": "-",
     "number": "0",
@@ -10,10 +9,8 @@ DEFAULT_VALUE = {
     "boolean": "false",
 }
 
-
-def build_invoice_prompt():
+def build_invoice_prompt(ocr_text):
     fields = CustomExtractionField.objects.filter(is_required=True)
-
     if not fields.exists():
         raise ValueError("No custom extraction fields configured")
 
@@ -21,29 +18,24 @@ def build_invoice_prompt():
     schema = []
 
     for f in fields:
-        instructions.append(
-            f'- "{f.name}" (type: {f.field_type}, default: "{DEFAULT_VALUE[f.field_type]}")'
-        )
+        instructions.append(f'- "{f.name}" (type: {f.field_type}, default: "{DEFAULT_VALUE[f.field_type]}")')
         schema.append(f'"{f.name}": "{DEFAULT_VALUE[f.field_type]}"')
 
     return f"""
-{SYSTEM_PROMPT}
+        {SYSTEM_PROMPT}
 
-{INVOICE_EXTRACTION_MASTER_PROMPT}
+        {INVOICE_EXTRACTION_MASTER_PROMPT}
 
-### STRICT EXTRACTION RULES (MANDATORY)
-1. You MUST extract ONLY the fields listed below.
-2. DO NOT add any extra keys.
-3. DO NOT rename fields.
-4. If a field value is not clearly visible, return its default value.
-5. If ANY doubt exists, return the default value.
-6. Output MUST be a valid JSON object with EXACTLY these keys and NOTHING else.
+        ### DATA INPUT: MULTILINGUAL OCR TEXT
+        The following text was extracted from an invoice using a high-precision OCR engine. 
+        Apply all the forensic rules above to this text.
 
-### ALLOWED FIELDS (ALLOWLIST)
-{chr(10).join(instructions)}
+        --- RAW OCR TEXT START ---
+        {ocr_text}
+        --- RAW OCR TEXT END ---
 
-### OUTPUT JSON SCHEMA (STRICT)
-{{
-{", ".join(schema)}
-}}
-""".strip()
+        ### TARGET JSON SCHEMA (STRICT)
+        {{
+        {", ".join(schema)}
+        }}
+        """.strip()

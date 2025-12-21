@@ -78,6 +78,7 @@
                                     <th>Status</th>
                                     <th>Success Count</th>
                                     <th>Duplicate Count</th>
+                                    <th>Failed Count</th>
                                     <th>Total Count</th>
                                     <th>Uploaded By</th>
                                     <th>Uploaded At</th>
@@ -178,13 +179,20 @@
                     </div>
                 `;
 
-                    Swal.update({
+
+                    Swal.fire({
                         title: data.batch_status === 'COMPLETED' ? 'Extraction Complete!' : 'Extraction Failed',
                         html: finalHtml,
-                        showConfirmButton: true
+                        icon: data.batch_status === 'COMPLETED' ? 'success' : 'error',
+                        showConfirmButton: true,
+                        confirmButtonText: 'OK'
+                    }).then((result) => {
+                        // Reload table when user closes the modal
+                        if (table) {
+                            console.log('Reloading table after modal close...');
+                            table.ajax.reload(null, false);
+                        }
                     });
-
-                    if (table) table.ajax.reload(null, false);
                 }
             } catch (err) {
                 console.error("Polling error:", err);
@@ -218,7 +226,7 @@
                 dataSrc: "data"
             },
             pageLength: 10,
-            order: [[8, 'desc']], 
+            order: [[8, 'desc']],
             columns: [
                 { data: "sl_no" },
                 { data: "extraction_batch_id" },
@@ -235,9 +243,10 @@
                 },
                 { data: "success_count" },
                 { data: "duplicate_count" },
+                { data: "failed_count" },
                 {
                     data: null,
-                    render: (row) => `${row.batch_processed_count} / ${row.batch_total_count}`
+                    render: (row) => `${row.batch_total_count}`
                 },
                 { data: "created_by" },
                 {
@@ -318,50 +327,50 @@
             }
         });
 
-    $('#invoiceTable').on('click', '.delete-invoice', function () {
-        const batchId = $(this).data('id'); 
+        $('#invoiceTable').on('click', '.delete-invoice', function () {
+            const batchId = $(this).data('id');
 
-        Swal.fire({
-            title: "Delete Batch?",
-            text: "This will remove the batch and all extracted invoice data. This action cannot be undone.",
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonColor: "#d33",
-            cancelButtonColor: "#3085d6",
-            confirmButtonText: "Yes, delete it!",
-            allowOutsideClick: false
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                Swal.fire({
-                    title: 'Deleting...',
-                    didOpen: () => Swal.showLoading(),
-                    allowOutsideClick: false,
-                    showConfirmButton: false
-                });
-
-                try {
-                    const response = await fetch(`/api/invoice-extraction/delete/${batchId}/`, {
-                        method: "POST",
-                        headers: {
-                            "X-CSRFToken": getCSRFToken(),
-                            "Content-Type": "application/json"
-                        }
+            Swal.fire({
+                title: "Delete Batch?",
+                text: "This will remove the batch and all extracted invoice data. This action cannot be undone.",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonColor: "#d33",
+                cancelButtonColor: "#3085d6",
+                confirmButtonText: "Yes, delete it!",
+                allowOutsideClick: false
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Deleting...',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false,
+                        showConfirmButton: false
                     });
 
-                    const data = await response.json();
+                    try {
+                        const response = await fetch(`/api/invoice-extraction/delete/${batchId}/`, {
+                            method: "POST",
+                            headers: {
+                                "X-CSRFToken": getCSRFToken(),
+                                "Content-Type": "application/json"
+                            }
+                        });
 
-                    if (data.success) {
-                        Swal.fire("Deleted!", data.message, "success");
-                        table.ajax.reload(null, false); 
-                    } else {
-                        throw new Error(data.message || "Delete failed");
+                        const data = await response.json();
+
+                        if (data.success) {
+                            Swal.fire("Deleted!", data.message, "success");
+                            table.ajax.reload(null, false);
+                        } else {
+                            throw new Error(data.message || "Delete failed");
+                        }
+                    } catch (err) {
+                        Swal.fire("Error", err.message, "error");
                     }
-                } catch (err) {
-                    Swal.fire("Error", err.message, "error");
                 }
-            }
+            });
         });
-    });
 
     });
 </script>

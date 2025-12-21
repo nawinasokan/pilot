@@ -17,3 +17,7 @@ django-crum
 pandas
 openpyxl
 google-genai
+paddleocr>=2.7.0
+paddlepaddle>=2.5.0
+requests>=2.28.0
+easyocr>=1.7.0
