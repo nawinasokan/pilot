@@ -6,16 +6,13 @@ Tests English, Chinese, Japanese, and Korean invoice recognition
 import sys
 import os
 
-# Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.gemini.ocr_engine import extract_text_from_url
 
-# Test URLs for different languages
+
 test_invoices = {
     "English": "https://resources.tallysolutions.com/mena/wp-content/uploads/2022/01/tax-invoice-format-2-tallyprime.jpg",
-    "Chinese (Sample)": "https://example.com/chinese-invoice.jpg",  # Replace with actual Chinese invoice URL
-    "Japanese (Sample)": "https://example.com/japanese-invoice.jpg",  # Replace with actual Japanese invoice URL
 }
 
 print("=" * 60)

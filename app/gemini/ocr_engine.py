@@ -31,21 +31,9 @@ if IS_LINUX:
 # ---------------- THREAD-LOCAL OCR (PRODUCTION READY) ----------------
 import threading
 
-# Thread-local storage for OCR instances
 _thread_local = threading.local()
 
 def get_ocr():
-    """
-    Get or initialize a thread-local PaddleOCR instance.
-    
-    Each thread gets its own OCR instance, enabling true parallel processing
-    without threading conflicts. This is production-ready for processing
-    thousands of invoices efficiently.
-    
-    Returns:
-        PaddleOCR instance for the current thread
-    """
-    # Check if current thread has an OCR instance
     if not hasattr(_thread_local, 'ocr'):
         print(f"🔧 Initializing OCR for thread {threading.current_thread().name}")
         _thread_local.ocr = _init_ocr()
@@ -54,17 +42,6 @@ def get_ocr():
 
 
 def _init_ocr():
-    """
-    Initialize PaddleOCR with English for FAST processing.
-    
-    Note: Even with English OCR, Gemini can extract data from Asian invoices
-    because Gemini is multilingual and can interpret garbled/mixed text.
-    
-    This provides the best balance of:
-    - Speed (English OCR is 3x faster)
-    - Multilingual support (Gemini handles the translation)
-    - Stability (no freezing issues)
-    """
     try:
         return PaddleOCR(
             lang="en",
@@ -76,14 +53,10 @@ def _init_ocr():
 
 
 def preprocess(img: np.ndarray) -> np.ndarray:
-    """
-    Minimal preprocessing - resize if too large.
-    Production-optimized for speed and memory efficiency.
-    """
+
     height, width = img.shape[:2]
     max_dimension = 2000
     
-    # Only resize if image is too large
     if max(height, width) > max_dimension:
         scale = max_dimension / max(height, width)
         new_width = int(width * scale)
@@ -94,36 +67,19 @@ def preprocess(img: np.ndarray) -> np.ndarray:
 
 
 def extract_text_from_url(url: str) -> str:
-    """
-    Extract text from an image URL using PaddleOCR.
-    
-    Production-ready with thread-local OCR instances for parallel processing.
-    Each thread uses its own OCR model, enabling true parallelism.
-    
-    Args:
-        url: Image URL to process
-        
-    Returns:
-        Extracted text as a string with newlines separating lines.
-        Returns empty string on error.
-    """
+
     try:
-        # Download image
         response = requests.get(url, timeout=20)
         response.raise_for_status()
 
-        # Load and convert to RGB
         img = Image.open(BytesIO(response.content)).convert("RGB")
         img_np = np.array(img)
         
-        # Preprocess
         img_processed = preprocess(img_np)
 
-        # Run OCR (thread-local instance, no lock needed)
         ocr = get_ocr()
         result = ocr.ocr(img_processed)
         
-        # Extract text
         texts = []
         if result and isinstance(result, list):
             for page in result:
@@ -145,30 +101,15 @@ def extract_text_from_url(url: str) -> str:
 
 
 def extract_text_from_file(file_path: str) -> str:
-    """
-    Extract text from a local image file.
-    
-    Works on both Windows and Linux.
-    
-    Args:
-        file_path: Path to local image file
-        
-    Returns:
-        Extracted text as a string with newlines separating lines
-    """
     try:
-        # Load image
         img = Image.open(file_path).convert("RGB")
         img_np = np.array(img)
         
-        # Preprocess
         img_processed = preprocess(img_np)
 
-        # Run OCR
         ocr = get_ocr()
         result = ocr.ocr(img_processed)
         
-        # Extract text
         texts = []
         if result and isinstance(result, list):
             for page in result:

@@ -34,7 +34,7 @@
         <div class="col-12 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h6 class="card-title mb-0">Invoice Extraction</h6>
+                    <h6 class="card-title">Invoice Extraction</h6>
                 </div>
                 <div class="card-body">
                     <div class="row">
@@ -137,7 +137,6 @@
         `,
             allowOutsideClick: false,
             showConfirmButton: false,
-            didOpen: () => Swal.showLoading()
         });
 
         progressInterval = setInterval(async () => {
@@ -187,13 +186,11 @@
                         showConfirmButton: true,
                         confirmButtonText: 'OK'
                     }).then((result) => {
-                        // Reload table when user closes the modal
                         if (table) {
                             console.log('Reloading table after modal close...');
                             table.ajax.reload(null, false);
                         }
 
-                        // Reset file dropdown to allow new selection
                         $('#fileSelect').val(null).trigger('change');
                     });
                 }
