@@ -13,6 +13,10 @@ from app.models import ExtractionBatch, InvoiceExtraction, CustomExtractionField
 from app.gemini.ocr_engine import extract_text_from_url
 from app.gemini.builder import build_invoice_prompt
 from app.gemini.client import client
+import re
+from collections import Counter
+from app.gemini.script_registry import detect_scripts
+
 
 MAX_WORKERS = 10  
 
@@ -74,39 +78,55 @@ def store_invoice_extraction(*, batch_master, url, extracted_data, user_id):
 
 
 # ============ OCR & GEMINI VALIDATION ============
-
-
-def validate_ocr_quality(raw_text):
-
+def validate_ocr_quality(raw_text: str):
     if not raw_text:
         return False, "Empty OCR text"
-    
-    clean_text = ' '.join(raw_text.split())
-    
-    if len(clean_text) < 50:
-        return False, f"OCR text too short ({len(clean_text)} chars, minimum 50 required)"
-    
-    words = [w for w in clean_text.split() if len(w) >= 3 and any(c.isalpha() for c in w)]
-    if len(words) < 10:
-        return False, f"Too few meaningful words ({len(words)}, minimum 10 required)"
-    
-    invoice_keywords = [
-        'invoice', 'bill', 'receipt', 'tax', 'amount', 'total', 'date',
-        'gstin', 'gst', 'vat', 'supplier', 'buyer', 'customer', 'payment',
-        'quantity', 'price', 'subtotal', 'grand total', 'net amount'
+
+    text = raw_text.strip()
+    if len(text) < 30:
+        return False, "OCR text too short"
+
+    scripts = detect_scripts(text)
+
+    numbers = re.findall(r"\d+", text)
+    if len(numbers) < 4:  
+        return False, "Too few numeric values for an invoice"
+
+    digit_ratio = sum(c.isdigit() for c in text) / max(len(text), 1)
+    has_numeric_density = digit_ratio >= 0.05
+
+    date_patterns = [
+        r"\d{1,2}[-/]\d{1,2}[-/]\d{2,4}",
+        r"\d{4}[-/]\d{1,2}[-/]\d{1,2}",
     ]
-    
-    text_lower = clean_text.lower()
-    has_invoice_keyword = any(keyword in text_lower for keyword in invoice_keywords)
-    
-    if not has_invoice_keyword:
-        return False, "No invoice-related keywords found (likely empty template or non-invoice image)"
-    
-    short_words = [w for w in words if len(w) <= 3]
-    if len(short_words) / len(words) > 0.7:
-        return False, "Text appears to be mostly gibberish/OCR errors"
-    
-    return True, "Valid invoice text"
+    has_date = any(re.search(p, text) for p in date_patterns)
+
+    has_separators = any(sep in text for sep in [":", "-", "/", "|", "：", "／"])
+    lines = [l for l in text.splitlines() if len(l.strip()) > 3]
+    has_structure = len(lines) >= 6
+
+    score = sum([
+        has_date,
+        has_numeric_density,
+        has_separators,
+        has_structure,
+        bool(scripts),
+    ])
+
+    if score < 3:
+        return False, f"Low invoice confidence (score={score})"
+
+    if scripts:
+        if len(text) < 40:
+            return False, "Multilingual invoice text too short"
+        return True, f"Valid multilingual invoice ({', '.join(scripts)})"
+
+    words = [w for w in text.split() if len(w) >= 3]
+    if len(words) < 8:
+        return False, "Too few meaningful Latin words"
+
+    return True, "Valid invoice text (language-agnostic)"
+
 
 
 def validate_gemini_response(data):
