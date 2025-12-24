@@ -1,23 +1,28 @@
+# ---------------- Core Framework ----------------
 Django>=5.0
 djangorestframework>=3.14
-psycopg2-binary>=2.9
 django-q>=1.3
-Pillow>=10.0
-numpy>=1.24
-opencv-python-headless>=4.8  
-drf-yasg>=1.21              
+drf-yasg>=1.21
 djangorestframework-simplejwt>=5.3
-torch 
-torchvision 
-torchaudio
-dtlpy
-setuptools>=78.1.1 
-python-dotenv
 django-crum
+python-dotenv
+setuptools>=78.1.1
+
+# ---------------- Database ----------------
+psycopg2-binary>=2.9
+
+# ---------------- Data / Files ----------------
+Pillow>=10.0
 pandas
 openpyxl
-google-genai
-paddleocr>=2.7.0
-paddlepaddle>=2.5.0
 requests>=2.28.0
-easyocr>=1.7.0
+
+# ---------------- AI / OCR (PINNED) ----------------
+numpy==1.24.4
+opencv-python-headless==4.6.0.66
+paddlepaddle==2.6.2
+paddleocr==2.7.0
+
+# ---------------- LLM ----------------
+google-genai
+

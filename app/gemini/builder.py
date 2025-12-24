@@ -27,7 +27,14 @@ def build_invoice_prompt(ocr_text):
         {INVOICE_EXTRACTION_MASTER_PROMPT}
 
         ### DATA INPUT: MULTILINGUAL OCR TEXT
-        The following text was extracted from an invoice using a high-precision OCR engine. 
+        The following text was extracted from an invoice using a high-precision OCR engine.
+
+        IMPORTANT RULES:
+        - The OCR text may contain Indian or Asian languages mixed with English.
+        - DO NOT translate names, addresses, item descriptions, or values.
+        - Extract values exactly as they appear in the text.
+        - If a field value is in a local language, keep it as-is.
+
         Apply all the forensic rules above to this text.
 
         --- RAW OCR TEXT START ---
